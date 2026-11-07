@@ -1,0 +1,135 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="brand_name">Hoop</string>
+
+    <!-- Welcome -->
+    <string name="welcome_title">Scopri cosa succede intorno a te</string>
+    <string name="welcome_subtitle">Domande, foto e video di chi è vicino a te.</string>
+    <string name="welcome_create_account">Crea un account</string>
+    <string name="welcome_sign_in">Accedi</string>
+    <string name="welcome_or_continue_with">oppure continua con</string>
+    <string name="welcome_continue_with_google">Continua con Google</string>
+    <string name="welcome_continue_with_facebook">Continua con Facebook</string>
+    <string name="welcome_continue_with_apple">Continua con Apple</string>
+
+    <!-- Sample content of the collage -->
+    <string name="welcome_sample_author_name">Luca</string>
+    <string name="welcome_sample_author_initials">LU</string>
+    <string name="welcome_sample_photo_title">Tramonto sul mare</string>
+    <string name="welcome_sample_question">La farmacia fa il turno di notte?</string>
+    <string name="welcome_sample_question_details">Marta · 120 m · 6 risposte</string>
+
+    <!-- Shared -->
+    <string name="action_back">Indietro</string>
+    <string name="field_email">Email</string>
+    <string name="field_email_placeholder">nome@esempio.it</string>
+    <string name="field_password">Password</string>
+    <string name="password_show">Mostra la password</string>
+    <string name="password_hide">Nascondi la password</string>
+    <string name="progress_step">Passo %1$d di %2$d</string>
+    <string name="strength_weak">Debole. Usa almeno 8 caratteri, con lettere e numeri.</string>
+    <string name="strength_fair">Discreta. Aggiungi un simbolo per renderla più forte.</string>
+    <string name="strength_good">Buona.</string>
+    <string name="strength_strong">Ottima.</string>
+    <string name="distance_meters">%1$d&#160;m</string>
+    <string name="distance_kilometers">%1$s&#160;km</string>
+
+    <!-- Sign in -->
+    <string name="signin_title">Bentornato</string>
+    <string name="signin_subtitle">Accedi per vedere cosa succede intorno a te.</string>
+    <string name="signin_password_placeholder">La tua password</string>
+    <string name="signin_forgot_password">Password dimenticata?</string>
+    <string name="signin_submit">Accedi</string>
+    <string name="signin_or">oppure</string>
+    <string name="signin_no_account">Non hai un account?</string>
+    <string name="signin_register">Registrati</string>
+
+    <!-- Sign up -->
+    <string name="signup_credentials_title">Crea il tuo account</string>
+    <string name="signup_credentials_subtitle">Ti servono solo un'email e una password.</string>
+    <string name="signup_typo_prompt">Intendevi</string>
+    <string name="signup_typo_suffix">?</string>
+    <string name="signup_continue">Continua</string>
+    <string name="signup_have_account">Hai già un account?</string>
+    <string name="signup_sign_in">Accedi</string>
+    <string name="signup_username_title">Come ti chiami?</string>
+    <string name="signup_username_subtitle">È il nome che vedranno gli altri vicino a te. Potrai cambiarlo.</string>
+    <string name="field_username">Nome utente</string>
+    <string name="username_checking">Controllo la disponibilità…</string>
+    <string name="username_available">%1$s è disponibile.</string>
+    <string name="username_available_description">Disponibile</string>
+    <string name="username_taken">%1$s è già in uso.</string>
+    <string name="terms_prefix">Ho letto e accetto i </string>
+    <string name="terms_terms">Termini</string>
+    <string name="terms_and"> e l'</string>
+    <string name="terms_privacy">Informativa sulla privacy</string>
+    <string name="terms_suffix">.</string>
+    <string name="terms_required">Per continuare devi accettare i Termini e l'Informativa.</string>
+    <string name="location_title">Dove sei?</string>
+    <string name="location_body">Hoop usa la tua posizione per mostrarti cosa succede intorno a te. Resta sul tuo telefono: gli altri vedono solo la distanza approssimativa.</string>
+    <string name="location_allow">Consenti la posizione</string>
+    <string name="location_not_now">Non ora</string>
+    <string name="radius_unit_km">km di raggio</string>
+    <string name="radius_unit_m">m di raggio</string>
+    <string name="radius_explainer_before">Il tuo primo Hoop si chiamerà </string>
+    <string name="radius_home_name">Casa</string>
+    <string name="radius_explainer_after">. Qui potrai pubblicare foto, video e domande. Negli altri Hoop potrai fare solo domande.</string>
+    <string name="radius_slider_description">Raggio del tuo primo Hoop</string>
+    <string name="radius_create">Crea il mio Hoop</string>
+    <string name="done_title">Ti diamo il benvenuto in Hoop, %1$s</string>
+    <string name="done_body">Il tuo Hoop Casa è pronto, con un raggio di %1$s. Vediamo cosa succede intorno a te.</string>
+    <string name="done_enter">Entra</string>
+    <string name="done_description">Fatto</string>
+
+    <!-- Password recovery -->
+    <string name="recovery_email_title">Password dimenticata?</string>
+    <string name="recovery_email_subtitle">Scrivi l'email del tuo account: ti mandiamo un link per sceglierne una nuova.</string>
+    <string name="recovery_send_link">Invia il link</string>
+    <string name="recovery_remembered">Ti è tornata in mente?</string>
+    <string name="recovery_sign_in">Accedi</string>
+    <string name="recovery_mail_title">Controlla la posta</string>
+    <string name="recovery_mail_body_before">Abbiamo mandato un link a </string>
+    <string name="recovery_mail_body_after">. Vale 30 minuti.</string>
+    <string name="recovery_mail_description">Email</string>
+    <string name="recovery_open_mail">Apri l'app di posta</string>
+    <string name="recovery_simulate_link">Simula il tocco sul link</string>
+    <string name="recovery_not_arrived">Non è arrivata?</string>
+    <string name="recovery_resend">Invia di nuovo</string>
+    <string name="recovery_resend_in">tra %1$s</string>
+    <string name="recovery_check_spam">Controlla anche nella cartella dello spam.</string>
+    <string name="recovery_new_title">Scegli una nuova password</string>
+    <string name="recovery_new_subtitle">Deve essere diversa dall'ultima che hai usato.</string>
+    <string name="field_new_password">Nuova password</string>
+    <string name="field_repeat_password">Ripeti la password</string>
+    <string name="passwords_match">Le password coincidono</string>
+    <string name="passwords_mismatch">Le password non coincidono.</string>
+    <string name="recovery_save_password">Salva la password</string>
+    <string name="recovery_done_title">Password cambiata</string>
+    <string name="recovery_done_body">Ora puoi accedere con la nuova password.</string>
+    <string name="recovery_go_sign_in">Vai all'accesso</string>
+
+    <!-- Domain errors -->
+    <string name="error_invalid_credentials">Email o password non corrette. Riprova oppure reimposta la password.</string>
+    <string name="error_email_already_used">Questa email è già registrata.</string>
+    <string name="error_username_taken">Questo nome utente è già in uso.</string>
+    <string name="error_unauthorized">Sessione scaduta. Accedi di nuovo.</string>
+    <string name="error_location_permission_denied">Senza il permesso di posizione non posso mostrarti cosa succede intorno a te. Puoi continuare e scegliere la zona dopo.</string>
+    <string name="error_location_unavailable">Non riesco a leggere la tua posizione.</string>
+    <string name="error_network">Connessione assente o server non raggiungibile.</string>
+    <string name="error_unknown">Qualcosa è andato storto. Riprova.</string>
+
+    <!-- Rule violations -->
+    <string name="violation_email_invalid">Controlla l'indirizzo email.</string>
+    <string name="violation_password_too_short">La password è troppo corta.</string>
+    <string name="violation_username_invalid">Il nome utente può avere lettere, numeri, punto e underscore.</string>
+    <string name="violation_login_identifier_blank">Inserisci email o nome utente.</string>
+    <string name="violation_coordinates_invalid">La posizione non è valida.</string>
+    <string name="violation_radius_out_of_range">Il raggio non è consentito.</string>
+    <string name="violation_post_text_blank">Scrivi qualcosa.</string>
+    <string name="violation_post_text_too_long">Il testo è troppo lungo.</string>
+    <string name="violation_post_media_missing">Scegli una foto o un video.</string>
+    <string name="violation_post_type_not_allowed">In questo Hoop si possono pubblicare solo domande.</string>
+    <string name="violation_too_many_hoops">Hai raggiunto il numero massimo di Hoop.</string>
+    <string name="violation_home_cannot_be_removed">L'Hoop iniziale non si può eliminare.</string>
+    <string name="violation_hoop_not_found">Hoop non trovato.</string>
+</resources>
