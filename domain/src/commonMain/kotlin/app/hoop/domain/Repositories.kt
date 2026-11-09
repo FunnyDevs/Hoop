@@ -3,7 +3,12 @@ package app.hoop.domain
 import app.hoop.domain.common.DomainResult
 import app.hoop.domain.geo.GeoPoint
 import app.hoop.domain.geo.Radius
+import app.hoop.domain.hoop.Hoop
+import app.hoop.domain.hoop.HoopId
 import app.hoop.domain.hoop.UserHoops
+import app.hoop.domain.identity.AppNotification
+import app.hoop.domain.post.FeedPost
+import app.hoop.domain.post.Reply
 import app.hoop.domain.identity.Email
 import app.hoop.domain.identity.LoginIdentifier
 import app.hoop.domain.identity.Password
@@ -37,6 +42,16 @@ data class Availability(val usernameTaken: Boolean, val emailTaken: Boolean)
 
 interface HoopsRepository {
     suspend fun getUserHoops(): DomainResult<UserHoops>
+    suspend fun addHoop(name: String, center: GeoPoint, radius: Radius): DomainResult<UserHoops>
+    suspend fun removeHoop(id: HoopId): DomainResult<UserHoops>
+    suspend fun resizeHoop(id: HoopId, radius: Radius): DomainResult<UserHoops>
+}
+
+interface FeedRepository {
+    /** Posts of [hoop] around [position] (the current position, for the initial Hoop), newest first. */
+    suspend fun getFeed(hoop: Hoop, position: GeoPoint): DomainResult<List<FeedPost>>
+    suspend fun addReply(postId: PostId, text: String): DomainResult<Reply>
+    suspend fun getNotifications(): DomainResult<List<AppNotification>>
 }
 
 interface PostsRepository {

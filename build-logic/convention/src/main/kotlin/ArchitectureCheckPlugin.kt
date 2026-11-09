@@ -57,6 +57,7 @@ abstract class CheckArchitectureTask : DefaultTask() {
         "domain/build.gradle.kts" to Regex("""project\(":(data|presentation|core)"""),
         "core/designsystem/build.gradle.kts" to Regex("""project\(":(domain|data|presentation)"""),
         "presentation/onboarding/build.gradle.kts" to Regex("""project\(":data"\)"""),
+        "presentation/home/build.gradle.kts" to Regex("""project\(":data"\)"""),
         "data/build.gradle.kts" to Regex("""project\(":(presentation|core)"""),
     )
 

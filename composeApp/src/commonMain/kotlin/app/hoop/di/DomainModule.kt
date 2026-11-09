@@ -18,5 +18,12 @@ val domainModule = module {
     factoryOf(::CheckEmailAvailabilityUseCase)
     factoryOf(::CheckUsernameAvailabilityUseCase)
     factoryOf(::PublishPostUseCase)
+    factoryOf(::GetUserHoopsUseCase)
+    factoryOf(::GetHoopFeedUseCase)
+    factoryOf(::AddReplyUseCase)
+    factoryOf(::GetNotificationsUseCase)
+    factoryOf(::AddHoopUseCase)
+    factoryOf(::RemoveHoopUseCase)
+    factoryOf(::ResizeHoopUseCase)
     single { EmailTypoDetector() }
 }

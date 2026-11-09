@@ -8,6 +8,8 @@ import org.koin.core.context.GlobalContext
 import org.koin.core.context.startKoin
 import org.koin.core.module.Module
 import org.koin.dsl.module
+import app.hoop.presentation.home.HomeConfig
+import app.hoop.presentation.home.di.homePresentationModule
 import app.hoop.presentation.onboarding.OnboardingConfig
 
 /**
@@ -22,9 +24,11 @@ fun initKoin(platformModules: List<Module> = emptyList()) {
             *platformModules.toTypedArray(),
             dataModule(platformParseConfig()),
             onboardingPresentationModule,
+            homePresentationModule,
             module {
                 // The reset-link simulator is only useful while the backend is a mock.
                 val map = platformMapConfig()
+                single { HomeConfig(map.styleUri, map.fallbackLatitude, map.fallbackLongitude) }
                 single {
                     OnboardingConfig(
                         showResetLinkSimulator = !platformParseConfig().isConfigured,

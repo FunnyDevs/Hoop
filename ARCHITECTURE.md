@@ -5,7 +5,8 @@ Modular Clean Architecture, Domain-Driven Design in the domain, dependency injec
 ## Modules and the dependency rule
 
 ```
-composeApp ──► presentation:onboarding ──► domain ◄── data
+composeApp ──► presentation:onboarding ─┐
+   │       └──► presentation:home ──────┴──► domain ◄── data
    │                    │
    └────────────────────┴──► core:designsystem
 ```
@@ -15,7 +16,8 @@ composeApp ──► presentation:onboarding ──► domain ◄── data
 | `domain` | Entities, Value Objects, aggregates, domain services, repository interfaces, use cases | only Kotlin and coroutines |
 | `data` | Repository implementations (Parse via Ktor), DTOs, mappers, technical errors → `DomainError`, fake repositories | `domain` |
 | `core:designsystem` | Tokens, theme, fonts, reusable components with no text and no business logic | nothing |
-| `presentation:onboarding` | Screens, ViewModels, Intent/Effect contracts, localized strings, error → text mapping | `domain`, `core:designsystem` |
+| `presentation:onboarding` | Welcome, sign-in, sign-up and recovery screens, ViewModels, Intent/Effect contracts, localized strings, error → text mapping | `domain`, `core:designsystem` |
+| `presentation:home` | Home: map with Hoop areas and pins, Hoop chips, post carousel, full-screen card with replies, ask bar and composer, notifications | `domain`, `core:designsystem` |
 | `composeApp` | Composition root: Koin, navigation, platform configuration | all of them |
 
 The rule is verified automatically: `./gradlew checkArchitecture` (it also runs on every app build). The rules live in `build-logic/convention/src/main/kotlin/ArchitectureCheckPlugin.kt`.

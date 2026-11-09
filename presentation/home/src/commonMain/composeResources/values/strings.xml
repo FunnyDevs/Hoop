@@ -1,0 +1,60 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="brand_name">Hoop</string>
+
+    <!-- Header and hoops bar -->
+    <string name="action_write">Scrivi</string>
+    <string name="action_notifications">Notifiche</string>
+    <string name="action_new_hoop">Nuovo hoop</string>
+    <string name="action_new_post">Nuovo post</string>
+    <string name="hoop_home_name">Casa</string>
+    <string name="hoops_new">Nuovo</string>
+    <string name="hoop_info">%1$s · raggio %2$s · %3$d post</string>
+    <string name="distance_meters">%1$d&#160;m</string>
+    <string name="distance_kilometers">%1$s&#160;km</string>
+
+    <!-- Cards -->
+    <string name="glyph_question">?</string>
+    <string name="tag_question">Domanda</string>
+    <string name="tag_photo">Foto</string>
+    <string name="tag_video">Video</string>
+    <string name="post_details">%1$s · %2$s</string>
+    <string name="time_now">ora</string>
+    <string name="time_minutes_ago">%1$d min fa</string>
+    <string name="time_hours_ago">%1$d h fa</string>
+    <plurals name="replies_count">
+        <item quantity="one">%1$d risposta</item>
+        <item quantity="other">%1$d risposte</item>
+    </plurals>
+    <plurals name="comments_count">
+        <item quantity="one">%1$d commento</item>
+        <item quantity="other">%1$d commenti</item>
+    </plurals>
+    <string name="reply_placeholder">Scrivi una risposta…</string>
+    <string name="comment_placeholder">Scrivi un commento…</string>
+    <string name="reply_send">Invia</string>
+    <string name="story_close">Chiudi</string>
+
+    <!-- New post -->
+    <string name="ask_placeholder_home">Chiedi qui intorno…</string>
+    <string name="ask_placeholder_other">Fai una domanda a %1$s…</string>
+    <string name="action_send">Invia</string>
+    <string name="menu_question">Domanda</string>
+    <string name="action_photo">Foto</string>
+    <string name="action_video">Video</string>
+    <string name="composer_in">In %1$s</string>
+    <string name="composer_hint_question">Cosa vuoi chiedere a chi è qui intorno?</string>
+    <string name="composer_hint_media">Aggiungi una didascalia</string>
+    <string name="composer_empty_error">Scrivi qualcosa prima di pubblicare</string>
+    <string name="composer_media_option">Immagine di esempio %1$d</string>
+    <string name="user_initials">TU</string>
+    <string name="toast_published">Pubblicato in %1$s</string>
+
+    <!-- Notifications -->
+    <string name="notification_replies">%1$s ha ricevuto %2$d risposte alla domanda</string>
+    <string name="notification_video">%1$s ha pubblicato un video a %2$s da te</string>
+    <string name="notification_question">%1$s ha pubblicato una domanda a %2$s da te</string>
+
+    <!-- Errors -->
+    <string name="error_generic">Qualcosa è andato storto. Riprova.</string>
+</resources>

@@ -12,6 +12,10 @@ kotlin {
             implementation(compose.material3)
             implementation(compose.components.resources)
             implementation(libs.maplibre.compose)
+            implementation(libs.kotlinx.serialization.json)
+        }
+        androidMain.dependencies {
+            implementation(libs.androidx.activity.compose)
         }
     }
 }

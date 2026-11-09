@@ -42,6 +42,13 @@ object HoopIcons {
     val Mail: ImageVector by lazy {
         line("Mail", THIN_STROKE, "M6 5h12a3 3 0 0 1 3 3v8a3 3 0 0 1-3 3H6a3 3 0 0 1-3-3V8a3 3 0 0 1 3-3z", "M3.5 7.5l8.5 6 8.5-6")
     }
+    val Chat: ImageVector by lazy { line("Chat", THIN_STROKE, "M4 5h16v11H9l-5 4z") }
+    val Camera: ImageVector by lazy { line("Camera", THIN_STROKE, "M4 8h3l2-3h6l2 3h3v11H4z", "M12 10a3.5 3.5 0 1 0 0 7 3.5 3.5 0 0 0 0-7z") }
+    val Pen: ImageVector by lazy { line("Pen", STROKE, "M4 20h4L19 9l-4-4L4 16z") }
+    val Bell: ImageVector by lazy { line("Bell", STROKE, "M6 17V11a6 6 0 0 1 12 0v6l1.5 2h-15z", "M10 21h4") }
+    val Send: ImageVector by lazy { line("Send", STROKE, "M5 12l14-7-5 14-2-6z") }
+    val Plus: ImageVector by lazy { line("Plus", 2.4f, "M12 5v14M5 12h14") }
+    val Close: ImageVector by lazy { line("Close", 2.4f, "M6 6l12 12M18 6L6 18") }
     val Pin: ImageVector by lazy {
         ImageVector.Builder("Pin", ICON_SIZE.dp, ICON_SIZE.dp, VIEWBOX, VIEWBOX).apply {
             addPath(

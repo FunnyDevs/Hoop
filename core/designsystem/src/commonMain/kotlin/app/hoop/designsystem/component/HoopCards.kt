@@ -33,6 +33,8 @@ import androidx.compose.ui.graphics.painter.Painter
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
+import androidx.compose.ui.text.font.FontWeight
 import app.hoop.designsystem.theme.HoopTheme
 
 object HoopCardDefaults {
@@ -134,28 +136,28 @@ fun HoopMediaCard(
 }
 
 @Composable
-fun HoopUserChip(initials: String, name: String, modifier: Modifier = Modifier) {
+fun HoopUserChip(initials: String, name: String, modifier: Modifier = Modifier, large: Boolean = false) {
     val spacing = HoopTheme.spacing
+    val avatarSize = if (large) HoopTheme.sizes.avatarLarge else HoopTheme.sizes.avatar
     Row(
         modifier = modifier
-            .height(HoopTheme.sizes.chipHeight)
-            .clip(HoopTheme.shapes.chip)
-            .background(HoopTheme.colors.surface)
-            .padding(start = spacing.xxs + 1.dp, end = spacing.sm),
+            .height(if (large) HoopTheme.sizes.chipHeightLarge else HoopTheme.sizes.chipHeight)
+            .clip(if (large) HoopTheme.shapes.pill else HoopTheme.shapes.chip)
+            .background(HoopTheme.colors.surface.copy(alpha = if (large) 0.92f else 1f))
+            .padding(start = if (large) spacing.xxs * 2 else spacing.xxs + 1.dp, end = if (large) spacing.sm + spacing.xxs else spacing.sm),
         verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = androidx.compose.foundation.layout.Arrangement.spacedBy(spacing.xs),
+        horizontalArrangement = androidx.compose.foundation.layout.Arrangement.spacedBy(if (large) spacing.xs + 1.dp else spacing.xs),
     ) {
         Box(
-            Modifier.size(HoopTheme.sizes.avatar).clip(HoopTheme.shapes.circle).background(HoopTheme.colors.avatar),
+            Modifier.size(avatarSize).clip(HoopTheme.shapes.circle).background(HoopTheme.colors.avatar),
             contentAlignment = Alignment.Center,
-        ) { Text(initials, style = HoopTheme.typography.labelSmall, color = HoopTheme.colors.onSurface) }
-        Text(name, style = HoopTheme.typography.labelSmall, color = HoopTheme.colors.onSurface)
+        ) { Text(initials, style = HoopTheme.typography.labelSmall.copy(fontSize = if (large) 10.sp else 12.sp), color = HoopTheme.colors.onSurface) }
+        Text(name, style = if (large) HoopTheme.typography.labelMedium.copy(fontWeight = FontWeight.SemiBold) else HoopTheme.typography.labelSmall, color = HoopTheme.colors.onSurface)
     }
 }
 
 @Composable
 fun HoopPlayBadge(modifier: Modifier = Modifier) {
-    val glyphColor = HoopTheme.colors.onSurface
     Box(
         modifier
             .size(HoopTheme.sizes.playBadge)
@@ -163,14 +165,20 @@ fun HoopPlayBadge(modifier: Modifier = Modifier) {
             .background(HoopTheme.colors.surface.copy(alpha = HoopTheme.motion.playBadgeAlpha)),
         contentAlignment = Alignment.Center,
     ) {
-        Canvas(Modifier.size(HoopTheme.sizes.playGlyph)) {
-            val triangle = Path().apply {
-                moveTo(size.width * HoopCardDefaults.PLAY_GLYPH_LEFT, size.height * HoopCardDefaults.PLAY_GLYPH_TOP)
-                lineTo(size.width * HoopCardDefaults.PLAY_GLYPH_RIGHT, size.height / 2f)
-                lineTo(size.width * HoopCardDefaults.PLAY_GLYPH_LEFT, size.height * HoopCardDefaults.PLAY_GLYPH_BOTTOM)
-                close()
-            }
-            drawPath(triangle, glyphColor)
+        HoopPlayGlyph(HoopTheme.colors.onSurface)
+    }
+}
+
+/** A "play" triangle of [HoopTheme.sizes.playGlyph] size. */
+@Composable
+fun HoopPlayGlyph(color: androidx.compose.ui.graphics.Color, modifier: Modifier = Modifier) {
+    Canvas(modifier.size(HoopTheme.sizes.playGlyph)) {
+        val triangle = Path().apply {
+            moveTo(size.width * HoopCardDefaults.PLAY_GLYPH_LEFT, size.height * HoopCardDefaults.PLAY_GLYPH_TOP)
+            lineTo(size.width * HoopCardDefaults.PLAY_GLYPH_RIGHT, size.height / 2f)
+            lineTo(size.width * HoopCardDefaults.PLAY_GLYPH_LEFT, size.height * HoopCardDefaults.PLAY_GLYPH_BOTTOM)
+            close()
         }
+        drawPath(triangle, color)
     }
 }

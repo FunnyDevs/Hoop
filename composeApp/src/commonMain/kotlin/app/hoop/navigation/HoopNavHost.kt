@@ -16,7 +16,7 @@ import androidx.navigation.NavBackStackEntry
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
-import app.hoop.home.HomePlaceholderScreen
+import app.hoop.presentation.home.HomeRoute
 import app.hoop.presentation.onboarding.navigation.OnboardingRoute
 import app.hoop.presentation.onboarding.navigation.onboardingGraph
 
@@ -64,6 +64,6 @@ internal fun HoopNavHost(modifier: Modifier = Modifier) {
             onSocialSignIn = { /* TODO: sign in with Google, Facebook, Apple */ },
             onOpenMailApp = { runCatching { uriHandler.openUri(MAIL_SCHEME) } },
         )
-        composable(HoopRoute.HOME) { HomePlaceholderScreen() }
+        composable(HoopRoute.HOME) { HomeRoute() }
     }
 }

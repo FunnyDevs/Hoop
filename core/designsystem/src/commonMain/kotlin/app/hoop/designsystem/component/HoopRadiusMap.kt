@@ -28,23 +28,10 @@ import dev.sargunv.maplibrecompose.core.GestureSettings
 import dev.sargunv.maplibrecompose.core.OrnamentSettings
 import dev.sargunv.maplibrecompose.expressions.dsl.const
 import io.github.dellisd.spatialk.geojson.Point
-import io.github.dellisd.spatialk.geojson.Polygon
 import io.github.dellisd.spatialk.geojson.Position
-import kotlin.math.PI
 import kotlin.time.Duration.Companion.milliseconds
-import kotlin.math.cos
-import kotlin.math.ln
-import kotlin.math.sin
-import kotlin.math.asin
-import kotlin.math.atan2
 
 private object RadiusMapSpec {
-    const val EARTH_RADIUS_METERS = 6_371_008.8
-    const val CIRCLE_STEPS = 96
-    /** Meters per dp at zoom 0 on the equator for a 512 px tile world. */
-    const val METERS_PER_DP_AT_ZOOM_ZERO = 78_271.516_964
-    const val MIN_ZOOM = 1.0
-    const val MAX_ZOOM = 17.0
     const val AREA_ALPHA = 0.14f
     val outlineWidth = 2.dp
     val dashPattern = listOf(3, 2)
@@ -73,15 +60,15 @@ fun HoopRadiusMap(
     // Layers are only composed once the style has loaded: until then (or when offline) a drawn map is shown.
     var styleLoaded by remember { mutableStateOf(false) }
     val camera = rememberCameraState(
-        CameraPosition(target = Position(longitude, latitude), zoom = zoomFor(radiusMeters, latitude, mapWidth.value, fitFraction), padding = contentPadding),
+        CameraPosition(target = Position(longitude, latitude), zoom = MapGeometry.zoomFor(radiusMeters, latitude, mapWidth.value, fitFraction), padding = contentPadding),
     )
     LaunchedEffect(latitude, longitude, radiusMeters, mapWidth, contentPadding, fitFraction) {
         camera.animateTo(
-            CameraPosition(target = Position(longitude, latitude), zoom = zoomFor(radiusMeters, latitude, mapWidth.value, fitFraction), padding = contentPadding),
+            CameraPosition(target = Position(longitude, latitude), zoom = MapGeometry.zoomFor(radiusMeters, latitude, mapWidth.value, fitFraction), padding = contentPadding),
             duration = RadiusMapSpec.cameraAnimation,
         )
     }
-    val circle = remember(latitude, longitude, radiusMeters) { circlePolygon(latitude, longitude, radiusMeters.toDouble()) }
+    val circle = remember(latitude, longitude, radiusMeters) { MapGeometry.circlePolygon(latitude, longitude, radiusMeters.toDouble()) }
     val center = remember(latitude, longitude) { Point(Position(longitude, latitude)) }
 
     MaplibreMap(
@@ -132,25 +119,3 @@ private fun OfflineRadiusBackdrop(radiusFraction: Float, contentPadding: Padding
 }
 
 private const val DEFAULT_FIT_FRACTION = 0.62f
-
-/** Zoom level at which a circle of [radiusMeters] takes [fitFraction] of [widthDp]. */
-private fun zoomFor(radiusMeters: Int, latitude: Double, widthDp: Float, fitFraction: Float): Double {
-    if (widthDp <= 0f) return RadiusMapSpec.MIN_ZOOM
-    val metersPerDp = (2.0 * radiusMeters) / (widthDp * fitFraction)
-    val zoom = ln(RadiusMapSpec.METERS_PER_DP_AT_ZOOM_ZERO * cos(latitude * PI / 180.0) / metersPerDp) / ln(2.0)
-    return zoom.coerceIn(RadiusMapSpec.MIN_ZOOM, RadiusMapSpec.MAX_ZOOM)
-}
-
-/** Polygon approximating a geodesic circle (great-circle destination points). */
-private fun circlePolygon(latitude: Double, longitude: Double, radiusMeters: Double): Polygon {
-    val lat = latitude * PI / 180.0
-    val lon = longitude * PI / 180.0
-    val angular = radiusMeters / RadiusMapSpec.EARTH_RADIUS_METERS
-    val ring = (0..RadiusMapSpec.CIRCLE_STEPS).map { step ->
-        val bearing = 2.0 * PI * step / RadiusMapSpec.CIRCLE_STEPS
-        val destLat = asin(sin(lat) * cos(angular) + cos(lat) * sin(angular) * cos(bearing))
-        val destLon = lon + atan2(sin(bearing) * sin(angular) * cos(lat), cos(angular) - sin(lat) * sin(destLat))
-        Position(destLon * 180.0 / PI, destLat * 180.0 / PI)
-    }
-    return Polygon(listOf(ring))
-}

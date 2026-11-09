@@ -60,6 +60,10 @@ The photos in the prototypes are placeholders from Pexels.
 - Location: the `LocationProvider` port (domain) is implemented per platform in `composeApp`: Android uses the platform `LocationManager` plus a runtime permission bridge (`ActivityPermissionRequester`, attached by `MainActivity`); iOS uses CoreLocation (`IosLocationProvider`, written but never compiled, needs `NSLocationWhenInUseUsageDescription`). Both are wired through `initKoin(platformModules)`.
 - iOS: the code is there (`MainViewController`) but there is no Xcode project, and Xcode is not installed on this machine, so iOS has never been compiled.
 
+## Home
+
+The up-to-date design of the home and its states lives in the same canvas as the sign-in flow (boards "Home in Casa", "Home in Lavoro", "Domanda aperta", "Video aperto", "Tocchi il tasto", "Barra fuori da Casa", "Scrivi", "Notifiche", "Mappa a tutto schermo", "Aggiungi un hoop"). The older prototype "Hoop Demo" is superseded. Implemented in `presentation:home` (backend: in-memory `FakeHomeStore` in `data` until the server functions are wired). Missing so far: map mode (long press: radius handle, remove, add with ghost circle).
+
 ## Architecture
 
 Multi-module project with Clean Architecture and DDD: see `ARCHITECTURE.md` (modules `domain`, `data`, `core:designsystem`, `presentation:onboarding`, `composeApp`). Rules are verified by `./gradlew checkArchitecture`, which also runs on every app build. No hardcoded string, color or address: strings in `composeResources/values`, colors in tokens, server from `local.properties` (`hoop.parse.baseUrl`, `hoop.parse.applicationId`, `hoop.parse.clientKey`). All code comments are written in English.

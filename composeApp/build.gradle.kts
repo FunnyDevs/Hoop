@@ -34,10 +34,10 @@ kotlin {
             implementation(project(":data"))
             implementation(project(":core:designsystem"))
             implementation(project(":presentation:onboarding"))
+            implementation(project(":presentation:home"))
             implementation(compose.runtime)
             implementation(compose.foundation)
             implementation(compose.material3)
-            implementation(compose.components.resources)
             implementation(libs.navigation.compose)
             implementation(libs.koin.core)
             implementation(libs.koin.compose.viewmodel)
@@ -73,9 +73,3 @@ android {
 
 // Architecture rules are verified on every build.
 tasks.matching { it.name == "preBuild" }.configureEach { dependsOn(":checkArchitecture") }
-
-compose.resources {
-    publicResClass = false
-    packageOfResClass = "app.hoop.resources"
-    generateResClass = always
-}
