@@ -26,6 +26,7 @@ import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.ime
 import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -70,6 +71,8 @@ import app.hoop.domain.identity.NotificationKind
 import app.hoop.domain.post.FeedPost
 import app.hoop.presentation.home.resources.*
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.first
+import org.jetbrains.compose.resources.pluralStringResource
 import org.jetbrains.compose.resources.stringResource
 import org.koin.compose.koinInject
 import org.koin.compose.viewmodel.koinViewModel
@@ -100,6 +103,7 @@ private object HomeSpec {
     val mapBottomMargin = 24.dp
     const val FOCUS_BLEND = 0.3
     const val TOAST_MILLIS = 1_900L
+    const val STORY_FULL_OPEN = 0.999f
 }
 
 /** Entry point: connects the ViewModel to the screen. */
@@ -124,6 +128,7 @@ fun HomeScreen(state: HomeUiState, config: HomeConfig, onIntent: (HomeIntent) ->
     val storyProgress = remember { Animatable(0f) }
     // True while the open card is being pulled by a finger rather than animating by itself.
     var dragOpening by remember { mutableStateOf(false) }
+    var fingerDown by remember { mutableStateOf(false) }
 
     BoxWithConstraints(Modifier.fillMaxSize().background(colors.mapLand)) {
         // ---- Map ----
@@ -203,19 +208,25 @@ fun HomeScreen(state: HomeUiState, config: HomeConfig, onIntent: (HomeIntent) ->
             LaunchedEffect(state.activeHoopId) { listState.scrollToItem(0) }
             // A new post goes first: bring it into view.
             LaunchedEffect(state.posts.firstOrNull()?.id) { listState.animateScrollToItem(0) }
+            // Only the user's own scrolling changes the selection; our scrolls to the selected card must not.
+            var programmaticScroll by remember { mutableStateOf(false) }
             LaunchedEffect(listState) {
                 snapshotFlow { listState.firstVisibleItemIndex }.collect { index ->
-                    if (index != state.selectedIndex && listState.isScrollInProgress) onIntent(HomeIntent.PostSelected(index))
+                    if (!programmaticScroll && index != state.selectedIndex && listState.isScrollInProgress) onIntent(HomeIntent.PostSelected(index))
                 }
             }
             LaunchedEffect(state.selectedIndex) {
-                if (listState.firstVisibleItemIndex != state.selectedIndex && !listState.isScrollInProgress) listState.animateScrollToItem(state.selectedIndex)
+                if (listState.firstVisibleItemIndex != state.selectedIndex && !listState.isScrollInProgress) {
+                    programmaticScroll = true
+                    try { listState.animateScrollToItem(state.selectedIndex) } finally { programmaticScroll = false }
+                }
             }
             val openDragPx = with(LocalDensity.current) { StoryDragRange.toPx() }
             LazyRow(
                 state = listState,
                 modifier = Modifier.align(Alignment.BottomStart).padding(bottom = cardsBottom).height(HoopPostCardDefaults.CarouselHeight).fillMaxWidth(),
-                contentPadding = PaddingValues(start = HomeSpec.cardsStart, end = HomeSpec.cardsEndPadding),
+                // Room after the last card so that any card, the last included, can sit in the first position.
+                contentPadding = PaddingValues(start = HomeSpec.cardsStart, end = (maxWidth - HoopPostCardDefaults.CarouselWidth - HomeSpec.cardsStart).coerceAtLeast(HomeSpec.cardsEndPadding)),
                 horizontalArrangement = Arrangement.spacedBy(HomeSpec.cardsGap),
                 flingBehavior = rememberSnapFlingBehavior(listState),
             ) {
@@ -223,7 +234,7 @@ fun HomeScreen(state: HomeUiState, config: HomeConfig, onIntent: (HomeIntent) ->
                     val shape = RoundedCornerShape(HoopPostCardDefaults.CornerRadius)
                     Box(
                         Modifier.width(HoopPostCardDefaults.CarouselWidth).height(HoopPostCardDefaults.CarouselHeight)
-                            .alpha(if (state.openPostId == post.id.value) 0f else 1f)
+                            .alpha(if (state.openPostId != null) 0f else 1f)
                             .shadow(HoopTheme.elevation.card, shape)
                             .clip(shape)
                             .onGloballyPositioned { cardBounds[post.id.value] = it.boundsInRoot() }
@@ -237,23 +248,26 @@ fun HomeScreen(state: HomeUiState, config: HomeConfig, onIntent: (HomeIntent) ->
                                         if (!started && amount < 0f) {
                                             started = true
                                             dragOpening = true
+                                            fingerDown = true
                                             onIntent(HomeIntent.PostOpened(post.id.value))
                                         }
                                         if (started) scope.launch { storyProgress.snapTo((storyProgress.value - amount / openDragPx).coerceIn(0f, 1f)) }
                                     },
                                     onDragEnd = {
+                                        fingerDown = false
                                         if (started) scope.launch {
                                             if (storyProgress.value > STORY_OPEN_THRESHOLD) storyProgress.animateTo(1f, storySpring())
                                             else { storyProgress.animateTo(0f, storySpring()); dragOpening = false; onIntent(HomeIntent.PostClosed) }
                                         }
                                     },
                                     onDragCancel = {
+                                        fingerDown = false
                                         if (started) scope.launch { storyProgress.animateTo(0f, storySpring()); dragOpening = false; onIntent(HomeIntent.PostClosed) }
                                     },
                                 )
                             }
                             .clickable { onIntent(HomeIntent.PostOpened(post.id.value)) },
-                    ) { PostCard(post, progress = 0f, panelInset = StoryPanelHeight + navBottom) }
+                    ) { PostCard(post, progress = 0f, flown = post.id.value in state.flownPostIds, bottomInset = navBottom, onFly = { onIntent(HomeIntent.FlyToggled(post.id.value)) }) }
                 }
             }
             HoopPageDots(
@@ -270,19 +284,15 @@ fun HomeScreen(state: HomeUiState, config: HomeConfig, onIntent: (HomeIntent) ->
                 composerOpen = state.composer != null,
             )
         }
-        AskBarMorph(
-            open = state.askBarOpen && state.composer == null, fullWidth = maxWidth - HomeSpec.fabEnd * 2,
-            hoopName = active?.name, isHome = active?.isHome == true,
-            onToggle = { onIntent(HomeIntent.AskBarToggled) }, onOpen = { onIntent(HomeIntent.ComposerOpened(it)) },
-            modifier = Modifier.align(Alignment.BottomEnd).padding(end = HomeSpec.fabEnd, bottom = cardsBottom),
+        ComposeMorph(
+            stage = when {
+                state.composer != null -> ComposeStage.SHEET
+                state.askBarOpen -> ComposeStage.BAR
+                else -> ComposeStage.BUTTON
+            },
+            screenWidth = maxWidth, composer = state.composer, hoop = active,
+            onToggle = { onIntent(HomeIntent.AskBarToggled) }, onOpen = { onIntent(HomeIntent.ComposerOpened(it)) }, onIntent = onIntent,
         )
-        AnimatedVisibility(
-            visible = state.composer != null, modifier = Modifier.fillMaxSize(),
-            enter = fadeIn() + slideInVertically(spring(dampingRatio = 0.85f, stiffness = Spring.StiffnessMediumLow)) { it / 2 },
-            exit = fadeOut() + slideOutVertically { it / 2 },
-        ) {
-            state.composer?.let { ComposerSheet(it, active, onIntent) }
-        }
 
         // ---- Notifications ----
         AnimatedVisibility(
@@ -294,18 +304,34 @@ fun HomeScreen(state: HomeUiState, config: HomeConfig, onIntent: (HomeIntent) ->
             NotificationsPopover(state.notifications) { onIntent(HomeIntent.NotificationOpened(it)) }
         }
 
+        // Once the card is completely open and released, it becomes the selected one (and the carousel scrolls to it).
+        LaunchedEffect(state.openPostId) {
+            val id = state.openPostId ?: return@LaunchedEffect
+            snapshotFlow { storyProgress.value >= HomeSpec.STORY_FULL_OPEN && !fingerDown }.first { it }
+            onIntent(HomeIntent.PostSelected(state.posts.indexOfFirst { it.id.value == id }.coerceAtLeast(0)))
+        }
+
+        // The keyboard going away folds the composer back into the ask bar.
+        val imeVisible = WindowInsets.ime.getBottom(LocalDensity.current) > 0
+        var imeSeen by remember(state.composer != null) { mutableStateOf(false) }
+        LaunchedEffect(state.composer != null, imeVisible) {
+            if (state.composer == null) return@LaunchedEffect
+            if (imeVisible) imeSeen = true else if (imeSeen) onIntent(HomeIntent.ComposerCollapsed)
+        }
+
         // ---- Full-screen card ----
         state.openPost?.let { post ->
             val bounds = cardBounds[post.id.value] ?: with(LocalDensity.current) {
                 centeredBounds(maxWidth.toPx(), maxHeight.toPx(), HoopPostCardDefaults.CarouselWidth.toPx(), HoopPostCardDefaults.CarouselHeight.toPx())
             }
             PostStory(
-                post = post, startBounds = bounds, replyText = state.replyText,
-                onReplyTextChange = { onIntent(HomeIntent.ReplyTextChanged(it)) },
-                onSend = { onIntent(HomeIntent.ReplySent) },
+                posts = state.posts, openId = post.id.value, startBounds = bounds,
+                boundsOf = { cardBounds[it] },
+                cardsStartPx = with(LocalDensity.current) { HomeSpec.cardsStart.toPx() },
                 onClosed = { dragOpening = false; onIntent(HomeIntent.PostClosed) },
-                progress = storyProgress, autoExpand = !dragOpening,
-            ) { progress -> PostCard(post, progress, StoryPanelHeight + navBottom) }
+                onPageChanged = { onIntent(HomeIntent.PostOpened(it)) },
+                progress = storyProgress, autoExpand = !dragOpening, holding = fingerDown,
+            ) { shown, progress -> PostCard(shown, progress, shown.id.value in state.flownPostIds, navBottom) { onIntent(HomeIntent.FlyToggled(shown.id.value)) } }
         }
 
         // ---- Toast ----
@@ -326,19 +352,28 @@ private fun centeredBounds(widthPx: Float, heightPx: Float, cardWidthPx: Float, 
     Rect((widthPx - cardWidthPx) / 2f, (heightPx - cardHeightPx) / 2f, (widthPx + cardWidthPx) / 2f, (heightPx + cardHeightPx) / 2f)
 
 @Composable
-private fun PostCard(post: FeedPost, progress: Float, panelInset: Dp) {
+private fun PostCard(post: FeedPost, progress: Float, flown: Boolean, bottomInset: Dp, onFly: () -> Unit) {
     val colors = HoopTheme.colors
+    val flies = post.fliesCount + if (flown) 1 else 0
     HoopPostCard(
         kind = post.type.toKind(),
         title = post.text,
-        details = stringResource(Res.string.post_details, formatDistance(post.distanceMeters), formatAge(post.ageMinutes)),
-        repliesLabel = repliesLabel(post),
-        authorInitials = initialsOf(post.author.name), authorName = post.author.name,
-        tagLabel = tagLabel(post.type),
+        fliesCount = formatCount(flies),
+        repliesCount = formatCount(post.replies.size),
+        authorInitials = initialsOf(post.author.name),
+        authorHandle = stringResource(Res.string.author_handle, post.author.name.lowercase()),
+        ageLabel = formatAge(post.ageMinutes),
+        streetLabel = stringResource(Res.string.street_distance, post.street, formatDistance(post.distanceMeters)),
+        fliesLabel = pluralStringResource(Res.plurals.flies_label, flies),
+        repliesLabel = pluralStringResource(Res.plurals.replies_label, post.replies.size),
+        flown = flown,
+        onFlyClick = onFly,
+        // The comments panel has no design yet: the pill is in place but does nothing.
+        onRepliesClick = {},
         questionColor = colors.questionCards[abs(post.id.value.hashCode()) % colors.questionCards.size],
         media = mediaPainter(post.mediaKey),
         progress = progress,
-        expandedBottomInset = panelInset,
+        bottomInset = bottomInset,
     )
 }
 

@@ -48,8 +48,10 @@ class HomeViewModel(
             // The "add a Hoop" flow (ghost circle on the map) is not built yet.
             HomeIntent.NewHoopRequested -> Unit
             is HomeIntent.PostSelected -> _state.update { it.copy(selectedIndex = intent.index.coerceIn(0, (it.posts.size - 1).coerceAtLeast(0))) }
-            is HomeIntent.PostOpened -> _state.update { s ->
-                s.copy(openPostId = intent.id, replyText = "", selectedIndex = s.posts.indexOfFirst { it.id.value == intent.id }.coerceAtLeast(0))
+            // The carousel keeps its position until the card is completely open (see PostSelected).
+            is HomeIntent.PostOpened -> _state.update { it.copy(openPostId = intent.id, replyText = "") }
+            is HomeIntent.FlyToggled -> _state.update { st ->
+                st.copy(flownPostIds = if (intent.id in st.flownPostIds) st.flownPostIds - intent.id else st.flownPostIds + intent.id)
             }
             HomeIntent.PostClosed -> _state.update { it.copy(openPostId = null, replyText = "") }
             is HomeIntent.ReplyTextChanged -> _state.update { it.copy(replyText = intent.value) }
@@ -62,6 +64,7 @@ class HomeViewModel(
             is HomeIntent.ComposerMediaPicked -> _state.update { s -> s.copy(composer = s.composer?.let { ComposerUi(it.type, it.text, intent.index, it.showError) }) }
             HomeIntent.ComposerPublished -> publish()
             HomeIntent.ComposerDismissed -> _state.update { it.copy(composer = null) }
+            HomeIntent.ComposerCollapsed -> _state.update { it.copy(composer = null, askBarOpen = true) }
             HomeIntent.NotificationsToggled -> toggleNotifications()
             is HomeIntent.NotificationOpened -> openNotification(intent.id)
             HomeIntent.ToastShown -> _state.update { it.copy(toast = null) }

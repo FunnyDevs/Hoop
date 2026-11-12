@@ -34,6 +34,8 @@ data class HomeUiState(
     val selectedIndex: Int = 0,
     val openPostId: String? = null,
     val replyText: String = "",
+    /** Posts the user said "Ci volo" to (local until the server supports it). */
+    val flownPostIds: Set<String> = emptySet(),
     val askBarOpen: Boolean = false,
     val composer: ComposerUi? = null,
     val notificationsOpen: Boolean = false,
@@ -48,9 +50,12 @@ data class HomeUiState(
 sealed interface HomeIntent {
     data class HoopSelected(val id: String) : HomeIntent
     data object NewHoopRequested : HomeIntent
+    /** The keyboard was closed while writing: the composer folds back into the ask bar. */
+    data object ComposerCollapsed : HomeIntent
     data class PostSelected(val index: Int) : HomeIntent
     data class PostOpened(val id: String) : HomeIntent
     data object PostClosed : HomeIntent
+    data class FlyToggled(val id: String) : HomeIntent
     data class ReplyTextChanged(val value: String) : HomeIntent
     data object ReplySent : HomeIntent
     data object AskBarToggled : HomeIntent

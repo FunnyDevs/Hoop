@@ -25,8 +25,12 @@ class FeedPost(
     val distanceMeters: Int,
     val ageMinutes: Int,
     val replies: List<Reply>,
+    /** Street where the post was published; every post has one (questions, photos, videos). */
+    val street: String,
+    /** How many people said "Ci volo" (they are going there). */
+    val fliesCount: Int,
 ) {
-    fun withReply(reply: Reply) = FeedPost(id, hoopId, type, author, text, mediaKey, location, distanceMeters, ageMinutes, replies + reply)
+    fun withReply(reply: Reply) = FeedPost(id, hoopId, type, author, text, mediaKey, location, distanceMeters, ageMinutes, replies + reply, street, fliesCount)
 
     override fun equals(other: Any?): Boolean = other is FeedPost && other.id == id
     override fun hashCode(): Int = id.hashCode()

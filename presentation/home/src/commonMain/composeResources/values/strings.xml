@@ -18,7 +18,6 @@
     <string name="tag_question">Domanda</string>
     <string name="tag_photo">Foto</string>
     <string name="tag_video">Video</string>
-    <string name="post_details">%1$s · %2$s</string>
     <string name="time_now">ora</string>
     <string name="time_minutes_ago">%1$d min fa</string>
     <string name="time_hours_ago">%1$d h fa</string>
@@ -29,6 +28,18 @@
     <plurals name="comments_count">
         <item quantity="one">%1$d commento</item>
         <item quantity="other">%1$d commenti</item>
+    </plurals>
+    <string name="author_handle">@%1$s</string>
+    <string name="street_distance">%1$s · %2$s</string>
+    <string name="count_thousands">%1$d,%2$dk</string>
+    <string name="count_thousands_round">%1$dk</string>
+    <plurals name="flies_label">
+        <item quantity="one">ci vola</item>
+        <item quantity="other">ci volano</item>
+    </plurals>
+    <plurals name="replies_label">
+        <item quantity="one">risposta</item>
+        <item quantity="other">risposte</item>
     </plurals>
     <string name="reply_placeholder">Scrivi una risposta…</string>
     <string name="comment_placeholder">Scrivi un commento…</string>

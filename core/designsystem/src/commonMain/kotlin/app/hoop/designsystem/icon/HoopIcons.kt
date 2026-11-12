@@ -14,6 +14,8 @@ object HoopIcons {
     private const val ICON_SIZE = 24
     private const val STROKE = 2f
     private const val THIN_STROKE = 1.8f
+    private const val FLY_TILT = 28f
+    private const val FLY_STROKE = 1.2f
 
     private fun line(name: String, strokeWidth: Float = STROKE, vararg pathData: String): ImageVector =
         ImageVector.Builder(name, ICON_SIZE.dp, ICON_SIZE.dp, VIEWBOX, VIEWBOX).apply {
@@ -49,6 +51,25 @@ object HoopIcons {
     val Send: ImageVector by lazy { line("Send", STROKE, "M5 12l14-7-5 14-2-6z") }
     val Plus: ImageVector by lazy { line("Plus", 2.4f, "M12 5v14M5 12h14") }
     val Close: ImageVector by lazy { line("Close", 2.4f, "M6 6l12 12M18 6L6 18") }
+    val ArrowUp: ImageVector by lazy { line("ArrowUp", STROKE, "M12 19V6M6 11l6-6 6 6") }
+
+    /** "Ci volo": a swallow banking into a turn (filled, with a thin stroke of the same color), rotated by [FLY_TILT] around the center. */
+    val Fly: ImageVector by lazy {
+        ImageVector.Builder("Fly", ICON_SIZE.dp, ICON_SIZE.dp, VIEWBOX, VIEWBOX).apply {
+            addGroup(rotate = FLY_TILT, pivotX = VIEWBOX / 2f, pivotY = VIEWBOX / 2f)
+            addPath(
+                pathData = PathParser().parsePathString(
+                    "M2.5 8C6 8 9.5 9.5 12 13C14.5 9.5 18 8 21.5 8C19.5 12 16 14.3 13.2 15L14.8 20.5L12 18L9.2 20.5L10.8 15C8 14.3 4.5 12 2.5 8Z",
+                ).toNodes(),
+                fill = SolidColor(Color.Black),
+                stroke = SolidColor(Color.Black),
+                strokeLineWidth = FLY_STROKE,
+                strokeLineJoin = StrokeJoin.Round,
+            )
+            clearGroup()
+        }.build()
+    }
+
     val Pin: ImageVector by lazy {
         ImageVector.Builder("Pin", ICON_SIZE.dp, ICON_SIZE.dp, VIEWBOX, VIEWBOX).apply {
             addPath(

@@ -100,14 +100,17 @@ fun HoopToast(text: String, modifier: Modifier = Modifier) {
 
 /** Dots showing the position in a carousel. */
 @Composable
-fun HoopPageDots(count: Int, selected: Int, modifier: Modifier = Modifier) {
-    val colors = HoopTheme.colors
+fun HoopPageDots(
+    count: Int, selected: Int, modifier: Modifier = Modifier,
+    activeColor: androidx.compose.ui.graphics.Color = HoopTheme.colors.onSurface,
+    inactiveColor: androidx.compose.ui.graphics.Color = HoopTheme.colors.outlineStrong,
+) {
     androidx.compose.foundation.layout.Row(modifier, horizontalArrangement = androidx.compose.foundation.layout.Arrangement.spacedBy(HoopTheme.spacing.xs)) {
         repeat(count) { index ->
             val active = index == selected
             Box(
                 Modifier.size(width = if (active) 18.dp else 5.dp, height = 5.dp)
-                    .background(if (active) colors.onSurface else colors.outlineStrong, HoopTheme.shapes.pill),
+                    .background(if (active) activeColor else inactiveColor, HoopTheme.shapes.pill),
             )
         }
     }

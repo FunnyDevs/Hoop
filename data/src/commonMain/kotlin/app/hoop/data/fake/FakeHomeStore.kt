@@ -109,6 +109,7 @@ internal class FakeHomeStore : HoopsRepository, FeedRepository, PostsRepository 
                 ageMinutes = seed.ageMinutes,
                 replies = seed.replies.mapIndexed { i, r -> Reply("${seed.id}-r$i", Author(UserId(r.first.lowercase()), r.first), r.second) } +
                     newReplies[seed.id].orEmpty(),
+                street = STREETS[seed.id] ?: DEFAULT_STREET, fliesCount = FLIES[seed.id] ?: 0,
             )
         }
         return DomainResult.success(posts)
@@ -151,6 +152,9 @@ internal class FakeHomeStore : HoopsRepository, FeedRepository, PostsRepository 
 
     private companion object {
         const val HOME_ID = "home"
+        const val DEFAULT_STREET = "Via Tadino"
+        val STREETS = mapOf("c2" to "Via Sammartini", "c3" to "Piazza Duca d'Aosta", "c4" to "Via Lecco", "c5" to "Via Marcello")
+        val FLIES = mapOf("c1" to 2, "c2" to 14, "c3" to 37, "c5" to 1)
         const val ME_ID = "me"
         const val ME_NAME = "Tu"
         const val LATENCY_MILLIS = 250L

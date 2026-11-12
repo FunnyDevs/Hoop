@@ -69,3 +69,14 @@ internal fun repliesHeading(post: FeedPost): String = pluralStringResource(
 )
 
 internal fun initialsOf(name: String): String = name.take(2).uppercase()
+
+/** Counter of a card: plain up to 999, then "1,2k" so the row never overflows. */
+@Composable
+internal fun formatCount(count: Int): String = when {
+    count < COUNT_THOUSAND -> count.toString()
+    (count % COUNT_THOUSAND) / COUNT_HUNDRED == 0 -> stringResource(Res.string.count_thousands_round, count / COUNT_THOUSAND)
+    else -> stringResource(Res.string.count_thousands, count / COUNT_THOUSAND, (count % COUNT_THOUSAND) / COUNT_HUNDRED)
+}
+
+private const val COUNT_THOUSAND = 1000
+private const val COUNT_HUNDRED = 100

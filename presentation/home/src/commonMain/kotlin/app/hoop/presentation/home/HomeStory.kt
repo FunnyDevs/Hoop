@@ -4,7 +4,10 @@ import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.AnimationVector1D
 import androidx.compose.animation.core.spring
 import androidx.compose.foundation.background
+import androidx.compose.foundation.gestures.Orientation
 import androidx.compose.foundation.gestures.detectVerticalDragGestures
+import androidx.compose.foundation.gestures.draggable
+import androidx.compose.foundation.gestures.rememberDraggableState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -25,7 +28,15 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableFloatStateOf
+import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
+import androidx.compose.runtime.setValue
+import androidx.compose.runtime.snapshotFlow
+import androidx.compose.ui.draw.shadow
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -41,7 +52,8 @@ import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import app.hoop.designsystem.component.HoopBackHandler
 import app.hoop.designsystem.component.HoopInputBar
-import app.hoop.designsystem.component.HoopMapIconButton
+import app.hoop.designsystem.component.HoopPageDots
+import app.hoop.designsystem.component.rampOf
 import app.hoop.designsystem.component.HoopPostCardDefaults
 import app.hoop.designsystem.icon.HoopIcons
 import app.hoop.designsystem.theme.HoopTheme
@@ -51,80 +63,141 @@ import app.hoop.presentation.home.resources.*
 import kotlinx.coroutines.launch
 import org.jetbrains.compose.resources.stringResource
 import kotlin.math.abs
+import kotlin.math.ceil
+import kotlin.math.floor
 import kotlin.math.roundToInt
 
 private object StorySpec {
-    val panelHeight = 340.dp
-    val panelTravel = 360.dp
-    val panelCorner = 28.dp
-    /** Spring of the expansion: damping ratio and stiffness taken from the prototype (k = 230, c = 24). */
-    const val DAMPING = 0.79f
-    const val STIFFNESS = 230f
+    val dotsBottom = 30.dp
+    val DOTS_FADE = 0.7f to 1f
+    /** Spring of the expansion: damping ratio and stiffness taken from the prototype (stiffness 120, damping 17). */
+    const val DAMPING = 0.78f
+    const val STIFFNESS = 120f
     /** Dragging this many dp downwards closes the card completely. */
     val dragRange = 380.dp
     const val CLOSE_THRESHOLD = 0.72f
     val closeButtonTop = 48.dp
+    val cardsGap = 14.dp
+    /** Progress from which the row counts as fully open. */
+    const val OPEN = 0.999f
+    /** How much a sideways fling carries over to the next page. */
+    const val FLING_FACTOR = 0.2f
 }
 
 /**
- * A card that expands from where it sits in the carousel to full screen, with the replies below.
- * Dragging down shrinks it back. The expansion is a spring on a single progress value that interpolates the rectangle.
+ * The whole row of cards expands: every card grows from where it sits in the carousel to a full-screen page, side by side,
+ * so once open you can swipe sideways between posts. Dragging down shrinks the row back. A single spring on [progress]
+ * interpolates every rectangle; [pos] is the (fractional) index of the page shown.
  */
 @Composable
 internal fun PostStory(
-    post: FeedPost,
+    posts: List<FeedPost>,
+    openId: String,
     startBounds: Rect,
-    replyText: String,
-    onReplyTextChange: (String) -> Unit,
-    onSend: () -> Unit,
+    boundsOf: (String) -> Rect?,
+    cardsStartPx: Float,
     onClosed: () -> Unit,
+    onPageChanged: (String) -> Unit,
     progress: Animatable<Float, AnimationVector1D>,
     autoExpand: Boolean,
-    cardContent: @Composable (progress: Float) -> Unit,
+    holding: Boolean,
+    cardContent: @Composable (post: FeedPost, progress: Float) -> Unit,
 ) {
     val scope = rememberCoroutineScope()
     val density = LocalDensity.current
     val spec = remember { storySpring() }
+    val startIndex = remember { posts.indexOfFirst { it.id.value == openId }.coerceAtLeast(0) }
+    val initial = remember { startBounds }
+    val pos = remember { Animatable(startIndex.toFloat()) }
+    // Where the cards sit in the carousel: card [base] has its left edge at [startLeft].
+    var base by remember { mutableIntStateOf(startIndex) }
+    // Until the carousel has been aligned on the shown post, the cards start from where the opened one was.
+    var live by remember { mutableStateOf(false) }
+    var verticalDrag by remember { mutableStateOf(false) }
+    val holdingNow by rememberUpdatedState(holding)
+    val openIdNow by rememberUpdatedState(openId)
+    val onPageChangedNow by rememberUpdatedState(onPageChanged)
+    val lastIndex = (posts.size - 1).coerceAtLeast(0)
 
     // When the card is opened by dragging, the finger drives the progress instead.
     LaunchedEffect(Unit) { if (autoExpand) progress.animateTo(1f, spec) }
+    // Once fully open and released, the carousel is aligned on the shown post: that is where closing goes back to.
+    LaunchedEffect(Unit) {
+        snapshotFlow { progress.value >= StorySpec.OPEN && !holdingNow && !verticalDrag && !pos.isRunning }.collect { settled ->
+            if (!settled) return@collect
+            val page = pos.value.roundToInt().coerceIn(0, lastIndex)
+            base = page
+            live = true
+            posts.getOrNull(page)?.let { if (it.id.value != openIdNow) onPageChangedNow(it.id.value) }
+        }
+    }
     fun close() = scope.launch { progress.animateTo(0f, spec); onClosed() }
     HoopBackHandler(enabled = true) { close() }
 
     Box(Modifier.fillMaxSize().imePadding()) {
         val q = progress.value.coerceIn(0f, 1f)
         androidx.compose.foundation.layout.BoxWithConstraints(Modifier.fillMaxSize()) {
-            val full = Rect(0f, 0f, with(density) { maxWidth.toPx() }, with(density) { maxHeight.toPx() })
-            fun lerp(a: Float, b: Float) = a + (b - a) * q
-            val left = lerp(startBounds.left, full.left)
-            val top = lerp(startBounds.top, full.top)
-            val width = lerp(startBounds.width, full.width)
-            val height = lerp(startBounds.height, full.height)
+            val screenW = with(density) { maxWidth.toPx() }
+            val screenH = with(density) { maxHeight.toPx() }
             val dragPx = with(density) { StorySpec.dragRange.toPx() }
+            val cardW = with(density) { HoopPostCardDefaults.CarouselWidth.toPx() }
+            val cardH = with(density) { HoopPostCardDefaults.CarouselHeight.toPx() }
+            val gap = with(density) { StorySpec.cardsGap.toPx() }
+            fun lerp(a: Float, b: Float) = a + (b - a) * q
             Box(
-                Modifier.offset { IntOffset(left.roundToInt(), top.roundToInt()) }
-                    .size(with(density) { width.toDp() }, with(density) { height.toDp() })
-                    .clip(androidx.compose.foundation.shape.RoundedCornerShape(HoopPostCardDefaults.CornerRadius * (1f - q)))
+                Modifier.fillMaxSize()
                     .pointerInput(Unit) {
                         detectVerticalDragGestures(
+                            onDragStart = { verticalDrag = true },
                             onVerticalDrag = { _, dy -> scope.launch { progress.snapTo((progress.value - dy / dragPx).coerceIn(0f, 1.05f)) } },
-                            onDragEnd = { scope.launch { if (progress.value < StorySpec.CLOSE_THRESHOLD) close() else progress.animateTo(1f, spec) } },
-                            onDragCancel = { scope.launch { progress.animateTo(1f, spec) } },
+                            onDragEnd = {
+                                verticalDrag = false
+                                scope.launch { if (progress.value < StorySpec.CLOSE_THRESHOLD) close() else progress.animateTo(1f, spec) }
+                            },
+                            onDragCancel = { verticalDrag = false; scope.launch { progress.animateTo(1f, spec) } },
                         )
-                    },
+                    }
+                    .draggable(
+                        rememberDraggableState { dx -> scope.launch { pos.snapTo((pos.value - dx / screenW).coerceIn(0f, lastIndex.toFloat())) } },
+                        Orientation.Horizontal,
+                        enabled = q >= StorySpec.OPEN,
+                        onDragStopped = { velocity ->
+                            scope.launch {
+                                // A fling carries at most to the neighbouring page.
+                                val target = (pos.value - velocity / screenW * StorySpec.FLING_FACTOR).roundToInt()
+                                val low = floor(pos.value).toInt().coerceIn(0, lastIndex)
+                                val high = ceil(pos.value).toInt().coerceIn(0, lastIndex)
+                                pos.animateTo(target.coerceIn(low, high).toFloat(), spec)
+                            }
+                        },
+                    ),
             ) {
-                cardContent(q)
+                // Once aligned, the carousel's own layout is the target (it may be clamped at the end of the list).
+                val anchorLeft = if (live) boundsOf(posts[base.coerceIn(0, lastIndex)].id.value)?.left ?: cardsStartPx else initial.left
+                posts.forEachIndexed { index, post ->
+                    val left = lerp(anchorLeft + (index - base) * (cardW + gap), (index - pos.value) * screenW)
+                    val width = lerp(cardW, screenW)
+                    if (left + width < 0f || left > screenW) return@forEachIndexed
+                    val shape = androidx.compose.foundation.shape.RoundedCornerShape(HoopPostCardDefaults.CornerRadius * (1f - q))
+                    Box(
+                        Modifier.offset { IntOffset(left.roundToInt(), lerp(initial.top, 0f).roundToInt()) }
+                            .size(with(density) { width.toDp() }, with(density) { lerp(cardH, screenH).toDp() })
+                            .shadow(HoopTheme.elevation.card * (1f - q), shape)
+                            .clip(shape),
+                    ) { cardContent(post, q) }
+                }
             }
         }
-        HoopMapIconButton(
-            HoopIcons.Close, stringResource(Res.string.story_close), { close() },
-            Modifier.align(Alignment.TopEnd).padding(end = 10.dp, top = WindowInsets.statusBars.asPaddingValues().calculateTopPadding() + 4.dp).alpha(q),
+        // Carousel dots near the bottom, appearing at the end of the opening.
+        val shownIndex = pos.value.roundToInt().coerceIn(0, lastIndex)
+        HoopPageDots(
+            posts.size, shownIndex,
+            Modifier.align(Alignment.BottomCenter).padding(bottom = StorySpec.dotsBottom + WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()).alpha(rampOf(q, StorySpec.DOTS_FADE)),
+            activeColor = if (posts[shownIndex].type == PostType.Question) HoopTheme.colors.onSurface else HoopTheme.colors.onScrim,
+            inactiveColor = if (posts[shownIndex].type == PostType.Question) HoopTheme.colors.outlineStrong else HoopTheme.colors.onScrim.copy(alpha = 0.45f),
         )
-        RepliesPanel(post, replyText, onReplyTextChange, onSend, WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding(), Modifier.align(Alignment.BottomCenter).graphicsLayer { translationY = (1f - q) * with(density) { StorySpec.panelTravel.toPx() } })
     }
 }
-
-internal val StoryPanelHeight: Dp = StorySpec.panelHeight
 
 /** Dragging a card this far upwards expands it completely. */
 internal val StoryDragRange: Dp = StorySpec.dragRange
@@ -133,34 +206,3 @@ internal val StoryDragRange: Dp = StorySpec.dragRange
 internal const val STORY_OPEN_THRESHOLD = 0.3f
 
 internal fun storySpring() = spring<Float>(dampingRatio = StorySpec.DAMPING, stiffness = StorySpec.STIFFNESS)
-
-@Composable
-private fun RepliesPanel(post: FeedPost, text: String, onTextChange: (String) -> Unit, onSend: () -> Unit, bottomInset: Dp, modifier: Modifier) {
-    val colors = HoopTheme.colors
-    val spacing = HoopTheme.spacing
-    Column(
-        modifier.fillMaxWidth().height(StorySpec.panelHeight + bottomInset)
-            .background(colors.surface, androidx.compose.foundation.shape.RoundedCornerShape(topStart = StorySpec.panelCorner, topEnd = StorySpec.panelCorner))
-            .padding(start = spacing.lg - 4.dp, end = spacing.lg - 4.dp, top = spacing.md + spacing.xs, bottom = spacing.md + bottomInset),
-    ) {
-        Text(repliesHeading(post).uppercase(), style = HoopTheme.typography.labelSmall, color = colors.onSurfaceVariant)
-        LazyColumn(Modifier.weight(1f).padding(top = spacing.xs)) {
-            items(post.replies, key = { it.id }) { reply ->
-                Row(Modifier.fillMaxWidth().padding(vertical = spacing.sm - 1.dp), horizontalArrangement = Arrangement.spacedBy(spacing.sm)) {
-                    Box(Modifier.size(30.dp).background(colors.avatarSoft, HoopTheme.shapes.circle), contentAlignment = Alignment.Center) {
-                        Text(initialsOf(reply.author.name), style = HoopTheme.typography.labelSmall, color = colors.onSurface)
-                    }
-                    Column {
-                        Text(reply.author.name, style = HoopTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold), color = colors.onSurface)
-                        Text(reply.text, style = HoopTheme.typography.bodyMedium, color = colors.onSurface)
-                    }
-                }
-            }
-        }
-        HoopInputBar(
-            value = text, onValueChange = onTextChange,
-            placeholder = stringResource(if (post.type == PostType.Question) Res.string.reply_placeholder else Res.string.comment_placeholder),
-            sendLabel = stringResource(Res.string.reply_send), onSend = onSend, modifier = Modifier.padding(top = spacing.xs),
-        )
-    }
-}

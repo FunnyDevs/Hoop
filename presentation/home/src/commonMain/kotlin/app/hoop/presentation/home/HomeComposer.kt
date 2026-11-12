@@ -28,6 +28,11 @@ import androidx.compose.animation.core.spring
 import androidx.compose.foundation.layout.requiredWidth
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
+import androidx.compose.foundation.layout.ime
+import androidx.compose.foundation.layout.requiredSize
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.graphics.lerp
@@ -73,6 +78,8 @@ private object ComposeSpec {
     const val MORPH_ICON_FADE = 2.5f
     const val MORPH_ICON_DEGREES = 90f
     const val MORPH_CONTENT_START = 0.55f
+    const val MORPH_BAR_FADE = 3f
+    const val MORPH_SHEET_START = 0.4f
     const val SCRIM_ALPHA = 0.4f
     const val COMPOSER_SCRIM_ALPHA = 0.45f
 }
@@ -86,44 +93,81 @@ internal fun ComposeScrim(onClick: () -> Unit, composerOpen: Boolean) {
     )
 }
 
+/** The three shapes of the one surface: the round button, the ask bar, the writing sheet. */
+internal object ComposeStage {
+    const val BUTTON = 0
+    const val BAR = 1
+    const val SHEET = 2
+}
+
 /**
- * The "+" button and the ask bar as one shape: while [open] grows from the round button into the pill
- * (width, height and color interpolate with a spring) and the bar content fades in once there is room.
- * Tap the bar to write a question; in the initial Hoop it also offers photo and video.
+ * One surface that is the "+" button, the ask bar and the writing sheet: [stage] moves it between them and its width,
+ * height, position, corners and color interpolate with a spring while the content of each shape fades in and out.
+ * The sheet sits above the keyboard, so closing the keyboard folds it back into the bar.
  */
 @Composable
-internal fun AskBarMorph(
-    open: Boolean, fullWidth: Dp, hoopName: String?, isHome: Boolean,
-    onToggle: () -> Unit, onOpen: (PostType) -> Unit, modifier: Modifier = Modifier,
+internal fun ComposeMorph(
+    stage: Int, screenWidth: Dp, composer: ComposerUi?, hoop: HoopUi?,
+    onToggle: () -> Unit, onOpen: (PostType) -> Unit, onIntent: (HomeIntent) -> Unit, modifier: Modifier = Modifier,
 ) {
     val colors = HoopTheme.colors
+    val density = LocalDensity.current
     val progress by animateFloatAsState(
-        if (open) 1f else 0f,
+        stage.toFloat(),
         spring(dampingRatio = ComposeSpec.MORPH_DAMPING, stiffness = Spring.StiffnessMediumLow),
     )
-    val p = progress.coerceIn(0f, 1f)
+    val p = progress.coerceIn(0f, ComposeStage.SHEET.toFloat())
+    val bar = p.coerceAtMost(1f)
+    val sheet = (p - 1f).coerceIn(0f, 1f)
+    val navBottom = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()
+    val imeBottom = with(density) { WindowInsets.ime.getBottom(this).toDp() }
     val fab = HoopTheme.sizes.fab
-    val width = lerp(fab, fullWidth, p)
-    val height = lerp(fab, ComposeSpec.barHeight, p)
-    val shape = RoundedCornerShape(height / 2)
+    val barWidth = screenWidth - ComposeSpec.barInset * 2
+    val width = if (sheet > 0f) lerp(barWidth, screenWidth, sheet) else lerp(fab, barWidth, bar)
+    val height = if (sheet > 0f) lerp(ComposeSpec.barHeight, ComposeSpec.sheetHeight, sheet) else lerp(fab, ComposeSpec.barHeight, bar)
+    val endInset = lerp(ComposeSpec.barInset, 0.dp, sheet)
+    val bottomInset = lerp(ComposeSpec.barBottom + navBottom, maxOf(imeBottom, navBottom), sheet)
+    val topRadius = if (sheet > 0f) ComposeSpec.barCorner else height / 2
+    val bottomRadius = if (sheet > 0f) lerp(ComposeSpec.barCorner, 0.dp, sheet) else height / 2
+    val shape = RoundedCornerShape(topStart = topRadius, topEnd = topRadius, bottomStart = bottomRadius, bottomEnd = bottomRadius)
     val newPost = stringResource(Res.string.action_new_post)
-    Box(
-        modifier.size(width, height)
-            .shadow(HoopTheme.elevation.card, shape)
-            .background(lerp(colors.accent, colors.surface, p), shape)
-            .clip(shape)
-            .semantics { contentDescription = newPost }
-            .clickable(role = Role.Button) { if (open) onOpen(PostType.Question) else onToggle() },
-    ) {
-        Icon(
-            HoopIcons.Plus, null, tint = colors.onBrand,
-            modifier = Modifier.align(Alignment.Center).size(HoopTheme.sizes.iconMedium + 2.dp)
-                .alpha((1f - p * ComposeSpec.MORPH_ICON_FADE).coerceIn(0f, 1f)).rotate(ComposeSpec.MORPH_ICON_DEGREES * p),
-        )
+
+    // Keep the sheet content while it folds back, after the composer itself is gone.
+    var lastComposer by remember { mutableStateOf(composer) }
+    if (composer != null) lastComposer = composer
+    LaunchedEffect(sheet, composer) { if (sheet == 0f && composer == null) lastComposer = null }
+
+    Box(modifier.fillMaxSize()) {
         Box(
-            Modifier.align(Alignment.CenterEnd).requiredWidth(fullWidth).height(ComposeSpec.barHeight)
-                .alpha(((p - ComposeSpec.MORPH_CONTENT_START) / (1f - ComposeSpec.MORPH_CONTENT_START)).coerceIn(0f, 1f)),
-        ) { AskBarContent(hoopName, isHome, onOpen) }
+            Modifier.align(Alignment.BottomEnd).padding(end = endInset, bottom = bottomInset).size(width, height)
+                .shadow(HoopTheme.elevation.card, shape)
+                .background(lerp(colors.accent, colors.surface, bar), shape)
+                .clip(shape)
+                .semantics { contentDescription = newPost }
+                .clickable(enabled = stage < ComposeStage.SHEET, role = Role.Button) {
+                    if (stage == ComposeStage.BAR) onOpen(PostType.Question) else onToggle()
+                },
+        ) {
+            Icon(
+                HoopIcons.Plus, null, tint = colors.onBrand,
+                modifier = Modifier.align(Alignment.Center).size(HoopTheme.sizes.iconMedium + 2.dp)
+                    .alpha((1f - bar * ComposeSpec.MORPH_ICON_FADE).coerceIn(0f, 1f)).rotate(ComposeSpec.MORPH_ICON_DEGREES * bar),
+            )
+            val barAlpha = ((bar - ComposeSpec.MORPH_CONTENT_START) / (1f - ComposeSpec.MORPH_CONTENT_START)).coerceIn(0f, 1f) *
+                (1f - sheet * ComposeSpec.MORPH_BAR_FADE).coerceIn(0f, 1f)
+            if (barAlpha > 0f) {
+                Box(Modifier.align(Alignment.TopEnd).requiredWidth(barWidth).height(ComposeSpec.barHeight).alpha(barAlpha)) {
+                    AskBarContent(hoop?.name, hoop?.isHome == true, onOpen)
+                }
+            }
+            val sheetAlpha = ((sheet - ComposeSpec.MORPH_SHEET_START) / (1f - ComposeSpec.MORPH_SHEET_START)).coerceIn(0f, 1f)
+            val shown = lastComposer
+            if (shown != null && sheet > 0f) {
+                Box(Modifier.align(Alignment.TopStart).requiredSize(screenWidth, ComposeSpec.sheetHeight).alpha(sheetAlpha)) {
+                    ComposerContent(shown, hoop, onIntent)
+                }
+            }
+        }
     }
 }
 
@@ -164,23 +208,19 @@ private fun RoundAction(background: Color, size: Dp, description: String, onClic
 }
 
 /**
- * The writing sheet above the keyboard: who and where, the type with a way to change it,
- * the text in the serif, and the send button.
+ * What the writing sheet shows: who and where, the type with a way to change it,
+ * the text in the serif, and the send button. The surface around it is [ComposeMorph].
  */
 @Composable
-internal fun ComposerSheet(composer: ComposerUi, hoop: HoopUi?, onIntent: (HomeIntent) -> Unit, modifier: Modifier = Modifier) {
+internal fun ComposerContent(composer: ComposerUi, hoop: HoopUi?, onIntent: (HomeIntent) -> Unit, modifier: Modifier = Modifier) {
     val colors = HoopTheme.colors
     val spacing = HoopTheme.spacing
     val focus = remember { FocusRequester() }
     LaunchedEffect(Unit) { focus.requestFocus() }
     val hoopName = hoop?.name ?: stringResource(Res.string.hoop_home_name)
     val kind = composer.type.toKind()
-    Column(modifier.fillMaxSize().imePadding(), verticalArrangement = Arrangement.Bottom) {
-        Box(
-            Modifier.fillMaxWidth().height(ComposeSpec.sheetHeight)
-                .background(colors.surface, RoundedCornerShape(topStart = ComposeSpec.sheetCorner, topEnd = ComposeSpec.sheetCorner))
-                .padding(start = spacing.lg - 2.dp, end = spacing.lg - 2.dp, top = spacing.lg - 4.dp),
-        ) {
+    run {
+        Box(modifier.fillMaxSize().padding(start = spacing.lg - 2.dp, end = spacing.lg - 2.dp, top = spacing.lg - 4.dp)) {
             Column {
                 Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(spacing.sm)) {
                     Box(Modifier.size(ComposeSpec.avatar).background(colors.avatar, HoopTheme.shapes.circle), contentAlignment = Alignment.Center) {
