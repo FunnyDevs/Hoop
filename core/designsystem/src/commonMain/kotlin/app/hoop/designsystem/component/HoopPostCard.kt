@@ -32,6 +32,16 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.lerp
+import androidx.compose.ui.draw.clipToBounds
+import androidx.compose.ui.geometry.isSpecified
+import androidx.compose.ui.layout.layout
+import androidx.compose.ui.unit.Constraints
+import kotlin.math.PI
+import kotlin.math.abs
+import kotlin.math.cos
+import kotlin.math.max
+import kotlin.math.roundToInt
+import kotlin.math.sin
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.remember
 import androidx.compose.ui.platform.LocalDensity
@@ -125,6 +135,13 @@ object HoopPostCardDefaults {
     val ChipLabelGapOpen: Dp = 6.dp
     val ChipLabelMaxWidth: Dp = 90.dp
     val TopScrimFade = 0.2f to 0.7f
+
+    // Comments sheet: how the pills react while it rises (ranges of the sheet progress).
+    val SheetFlyFade = 0f to 0.3f
+    val SheetLabelFade = 0.1f to 0.4f
+    val SheetFlyDrop: Dp = 20.dp
+    /** Landscape view: the post's elements fade out over this range of the immersion progress. */
+    val ImmersionFade = 0f to 0.3f
 }
 
 /** 0 before [range].first, 1 after [range].second, linear in between. */
@@ -158,6 +175,12 @@ fun HoopPostCard(
     progress: Float = 0f,
     /** Space taken by the system navigation bar at the bottom: the open post's bottom items rise by it. */
     bottomInset: Dp = 0.dp,
+    /** Progress (0..1) of the comments sheet rising over the post; read in the draw phase only. */
+    sheetProgress: () -> Float = { 0f },
+    /** Progress (0..1) of the full-screen landscape view of a horizontal photo or video; read in the layout and draw phases only. */
+    immersion: () -> Float = { 0f },
+    /** +1 or -1: the media turns against the phone's physical rotation so it stays upright for the viewer. */
+    immersionSign: Float = 1f,
 ) {
     val colors = HoopTheme.colors
     val d = HoopPostCardDefaults
@@ -171,10 +194,39 @@ fun HoopPostCard(
     val contentColor = if (hasMedia) colors.onScrim else colors.onSurface
     val fade = (1f - p * 1.6f).coerceIn(0f, 1f)
     BoxWithConstraints(modifier.fillMaxSize()) {
+        val cardWidth = maxWidth
         if (!hasMedia) {
             Box(Modifier.fillMaxSize().background(questionColor))
         } else {
-            Image(media!!, null, Modifier.fillMaxSize(), contentScale = ContentScale.Crop)
+            val aspect = media!!.intrinsicSize.let { if (it.isSpecified && it.height > 0f) it.width / it.height else 1f }
+            Box(Modifier.fillMaxSize().clipToBounds()) {
+                if (aspect > 1f) {
+                    // Horizontal media always covers the card; with [immersion] it also turns and grows so no bar is ever visible.
+                    Image(
+                        media, null,
+                        Modifier.layout { measurable, constraints ->
+                            val w0 = constraints.maxWidth.toFloat()
+                            val h0 = constraints.maxHeight.toFloat()
+                            val theta = immersion() * (PI / 2).toFloat()
+                            val sin = abs(sin(theta))
+                            val cos = abs(cos(theta))
+                            val height = max((w0 * cos + h0 * sin) / aspect, w0 * sin + h0 * cos)
+                            val width = height * aspect
+                            val placeable = measurable.measure(Constraints.fixed(width.roundToInt(), height.roundToInt()))
+                            layout(constraints.maxWidth, constraints.maxHeight) {
+                                placeable.place(((w0 - width) / 2f).roundToInt(), ((h0 - height) / 2f).roundToInt())
+                            }
+                        }.graphicsLayer { rotationZ = immersionSign * 90f * immersion() },
+                        contentScale = ContentScale.Crop,
+                    )
+                } else {
+                    Image(media, null, Modifier.fillMaxSize(), contentScale = ContentScale.Crop)
+                }
+            }
+        }
+        // Everything but the media fades out in the landscape view and comes back when turning upright.
+        Box(Modifier.fillMaxSize().graphicsLayer { alpha = 1f - rampOf(immersion(), d.ImmersionFade) }) {
+        if (hasMedia) {
             Box(
                 Modifier.align(Alignment.BottomCenter).fillMaxWidth().fillMaxHeight(d.BOTTOM_SCRIM_FRACTION)
                     .background(Brush.verticalGradient(listOf(colors.scrim.copy(alpha = 0f), colors.scrim.copy(alpha = d.BOTTOM_SCRIM_ALPHA)))),
@@ -228,7 +280,7 @@ fun HoopPostCard(
         // Closed: the time on the left, vertically centered on the same line as the counters. It never runs under them.
         Box(
             Modifier.align(Alignment.BottomStart).padding(horizontal = d.TitleInsetClosed).padding(bottom = d.MetaBottomClosed)
-                .height(d.ChipHeightClosed).widthIn(max = (maxWidth - d.TitleInsetClosed * 2 - d.CountersReserve).coerceAtLeast(d.MetaMinTextWidth))
+                .height(d.ChipHeightClosed).widthIn(max = (cardWidth - d.TitleInsetClosed * 2 - d.CountersReserve).coerceAtLeast(d.MetaMinTextWidth))
                 .alpha(1f - rampOf(p, d.MetaFade)),
             contentAlignment = Alignment.CenterStart,
         ) {
@@ -246,7 +298,7 @@ fun HoopPostCard(
         }
 
         // The two counters of the closed card ARE the pills of the open post: they widen, grow taller and gain a background.
-        val pillWidth = (maxWidth - d.PillsInset * 2 - d.PillsGap) / 2
+        val pillWidth = (cardWidth - d.PillsInset * 2 - d.PillsGap) / 2
         val pillsActive = p >= d.PILLS_ACTIVE_PROGRESS
         val chipBottom = d.MetaBottomClosed + (d.PillsBottom - d.MetaBottomClosed) * k + bottomInset * p
         Row(
@@ -257,11 +309,19 @@ fun HoopPostCard(
             Spacer(Modifier.weight(1f))
             MorphingChip(
                 HoopIcons.Fly, HoopIcons.Fly, fliesCount, fliesLabel, p, k, pillWidth, contentColor, hasMedia, flown, pillsActive, onFlyClick,
+                // While the comments sheet rises, the Ci volo pill slips down and out.
+                extra = Modifier.graphicsLayer {
+                    val gone = rampOf(sheetProgress(), d.SheetFlyFade)
+                    alpha = 1f - gone
+                    translationY = d.SheetFlyDrop.toPx() * gone
+                },
             )
             Spacer(Modifier.width(d.MetaItemGap + (d.PillsGap - d.MetaItemGap) * p))
             MorphingChip(
                 HoopIcons.Chat, HoopIcons.ArrowUp, repliesCount, repliesLabel, p, k, pillWidth, contentColor, hasMedia, false, pillsActive, onRepliesClick,
+                labelFade = { 1f - rampOf(sheetProgress(), d.SheetLabelFade) },
             )
+        }
         }
     }
 }
@@ -274,6 +334,7 @@ fun HoopPostCard(
 private fun MorphingChip(
     closedIcon: ImageVector, openIcon: ImageVector, count: String, label: String, p: Float, k: Float, pillWidth: Dp,
     closedColor: Color, onMedia: Boolean, active: Boolean, enabled: Boolean, onClick: () -> Unit,
+    extra: Modifier = Modifier, labelFade: () -> Float = { 1f },
 ) {
     val colors = HoopTheme.colors
     val d = HoopPostCardDefaults
@@ -297,7 +358,7 @@ private fun MorphingChip(
     val swap = rampOf(p, d.ChipIconSwap)
     val iconSize = mix(d.ChipIconClosed, d.PillIconSize)
     Row(
-        Modifier.width(width).height(height).clip(RoundedCornerShape(height / 2)).background(container)
+        extra.width(width).height(height).clip(RoundedCornerShape(height / 2)).background(container)
             .clickable(enabled = enabled, onClick = onClick),
         horizontalArrangement = Arrangement.Center,
         verticalAlignment = Alignment.CenterVertically,
@@ -314,7 +375,7 @@ private fun MorphingChip(
         )
         Text(
             label,
-            Modifier.padding(start = d.ChipLabelGapOpen * labelProgress).widthIn(max = d.ChipLabelMaxWidth * labelProgress).alpha(labelProgress),
+            Modifier.padding(start = d.ChipLabelGapOpen * labelProgress).widthIn(max = d.ChipLabelMaxWidth * labelProgress).graphicsLayer { alpha = labelProgress * labelFade() },
             style = baseStyle.copy(fontSize = (d.ChipFontClosed.value + (d.ChipFontOpen.value - d.ChipFontClosed.value) * k).sp, fontWeight = if (bold) FontWeight.Bold else FontWeight.Medium),
             color = content, maxLines = 1, softWrap = false, overflow = TextOverflow.Clip,
         )

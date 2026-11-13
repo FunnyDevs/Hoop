@@ -8,7 +8,14 @@ import app.hoop.domain.identity.UserId
 data class Author(val id: UserId, val name: String)
 
 /** A reply (to a question) or comment (on a photo or video). */
-data class Reply(val id: String, val author: Author, val text: String)
+data class Reply(
+    val id: String,
+    val author: Author,
+    val text: String,
+    val ageMinutes: Int = 0,
+    /** How many people said "Ci volo" to this comment. */
+    val fliesCount: Int = 0,
+)
 
 /**
  * Read model of a post shown in a feed: the post plus what the UI needs around it.

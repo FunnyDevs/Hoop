@@ -328,10 +328,13 @@ fun HomeScreen(state: HomeUiState, config: HomeConfig, onIntent: (HomeIntent) ->
                 posts = state.posts, openId = post.id.value, startBounds = bounds,
                 boundsOf = { cardBounds[it] },
                 cardsStartPx = with(LocalDensity.current) { HomeSpec.cardsStart.toPx() },
+                replyText = state.replyText,
+                onReplyTextChange = { onIntent(HomeIntent.ReplyTextChanged(it)) },
+                onSend = { onIntent(HomeIntent.ReplySent) },
                 onClosed = { dragOpening = false; onIntent(HomeIntent.PostClosed) },
                 onPageChanged = { onIntent(HomeIntent.PostOpened(it)) },
                 progress = storyProgress, autoExpand = !dragOpening, holding = fingerDown,
-            ) { shown, progress -> PostCard(shown, progress, shown.id.value in state.flownPostIds, navBottom) { onIntent(HomeIntent.FlyToggled(shown.id.value)) } }
+            ) { shown, progress, effects -> PostCard(shown, progress, shown.id.value in state.flownPostIds, navBottom, { onIntent(HomeIntent.FlyToggled(shown.id.value)) }, effects) }
         }
 
         // ---- Toast ----
@@ -352,7 +355,10 @@ private fun centeredBounds(widthPx: Float, heightPx: Float, cardWidthPx: Float, 
     Rect((widthPx - cardWidthPx) / 2f, (heightPx - cardHeightPx) / 2f, (widthPx + cardWidthPx) / 2f, (heightPx + cardHeightPx) / 2f)
 
 @Composable
-private fun PostCard(post: FeedPost, progress: Float, flown: Boolean, bottomInset: Dp, onFly: () -> Unit) {
+private fun PostCard(
+    post: FeedPost, progress: Float, flown: Boolean, bottomInset: Dp, onFly: () -> Unit,
+    effects: PostCardEffects = PostCardEffects.None,
+) {
     val colors = HoopTheme.colors
     val flies = post.fliesCount + if (flown) 1 else 0
     HoopPostCard(
@@ -365,15 +371,17 @@ private fun PostCard(post: FeedPost, progress: Float, flown: Boolean, bottomInse
         ageLabel = formatAge(post.ageMinutes),
         streetLabel = stringResource(Res.string.street_distance, post.street, formatDistance(post.distanceMeters)),
         fliesLabel = pluralStringResource(Res.plurals.flies_label, flies),
-        repliesLabel = pluralStringResource(Res.plurals.replies_label, post.replies.size),
+        repliesLabel = repliesPillLabel(post),
         flown = flown,
         onFlyClick = onFly,
-        // The comments panel has no design yet: the pill is in place but does nothing.
-        onRepliesClick = {},
-        questionColor = colors.questionCards[abs(post.id.value.hashCode()) % colors.questionCards.size],
+        onRepliesClick = effects.onComments,
+        questionColor = questionColorOf(post),
         media = mediaPainter(post.mediaKey),
         progress = progress,
         bottomInset = bottomInset,
+        sheetProgress = effects.sheetProgress,
+        immersion = effects.immersion,
+        immersionSign = effects.immersionSign,
     )
 }
 

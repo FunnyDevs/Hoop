@@ -107,7 +107,7 @@ internal class FakeHomeStore : HoopsRepository, FeedRepository, PostsRepository 
                 author = Author(UserId(seed.author.lowercase()), seed.author), text = seed.text, mediaKey = seed.mediaKey,
                 location = location, distanceMeters = hypot(seed.dxMeters.toDouble(), seed.dyMeters.toDouble()).roundToInt(),
                 ageMinutes = seed.ageMinutes,
-                replies = seed.replies.mapIndexed { i, r -> Reply("${seed.id}-r$i", Author(UserId(r.first.lowercase()), r.first), r.second) } +
+                replies = seed.replies.mapIndexed { i, r -> Reply("${seed.id}-r$i", Author(UserId(r.first.lowercase()), r.first), r.second, ageMinutes = seed.ageMinutes / 2 + i * 3, fliesCount = (i * 7 + seed.id.length) % 5) } +
                     newReplies[seed.id].orEmpty(),
                 street = STREETS[seed.id] ?: DEFAULT_STREET, fliesCount = FLIES[seed.id] ?: 0,
             )

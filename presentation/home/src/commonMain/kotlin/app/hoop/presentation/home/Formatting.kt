@@ -80,3 +80,16 @@ internal fun formatCount(count: Int): String = when {
 
 private const val COUNT_THOUSAND = 1000
 private const val COUNT_HUNDRED = 100
+
+/** Background of a question card, the same one in the carousel, the open post and the comments sheet. */
+@Composable
+internal fun questionColorOf(post: FeedPost): androidx.compose.ui.graphics.Color {
+    val cards = app.hoop.designsystem.theme.HoopTheme.colors.questionCards
+    return cards[kotlin.math.abs(post.id.value.hashCode()) % cards.size]
+}
+
+/** Label of the replies pill: replies to a question, comments on a photo or video. */
+@Composable
+internal fun repliesPillLabel(post: FeedPost): String = pluralStringResource(
+    if (post.type == PostType.Question) Res.plurals.replies_label else Res.plurals.comments_label, post.replies.size,
+)

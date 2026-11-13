@@ -41,6 +41,12 @@
         <item quantity="one">risposta</item>
         <item quantity="other">risposte</item>
     </plurals>
+    <plurals name="comments_label">
+        <item quantity="one">commento</item>
+        <item quantity="other">commenti</item>
+    </plurals>
+    <string name="comments_hint">Trascina in su per allargare</string>
+    <string name="post_author_time">%1$s · %2$s</string>
     <string name="reply_placeholder">Scrivi una risposta…</string>
     <string name="comment_placeholder">Scrivi un commento…</string>
     <string name="reply_send">Invia</string>

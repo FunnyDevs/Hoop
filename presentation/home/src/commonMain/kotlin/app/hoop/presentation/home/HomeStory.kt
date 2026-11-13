@@ -1,9 +1,18 @@
 package app.hoop.presentation.home
 
 import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.Easing
+import androidx.compose.animation.core.tween
+import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.derivedStateOf
+import androidx.compose.ui.geometry.isSpecified
+import app.hoop.designsystem.component.LocalDeviceTurn
+import app.hoop.designsystem.component.LocalSystemBars
 import androidx.compose.animation.core.AnimationVector1D
 import androidx.compose.animation.core.spring
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.gestures.Orientation
 import androidx.compose.foundation.gestures.detectVerticalDragGestures
 import androidx.compose.foundation.gestures.draggable
@@ -82,7 +91,15 @@ private object StorySpec {
     const val OPEN = 0.999f
     /** How much a sideways fling carries over to the next page. */
     const val FLING_FACTOR = 0.2f
+    // The post stays whole behind the comments sheet; it is only darkened.
+    const val BEHIND_DIM = 0.38f
+    // Landscape view.
+    const val IMMERSION_MILLIS = 1000
+    val IMMERSION_FADE = 0f to 0.3f
 }
+
+/** Smootherstep: t^3 (6t^2 - 15t + 10), zero speed and acceleration at both ends. */
+private val SmootherStep = Easing { t -> t * t * t * (t * (t * 6f - 15f) + 10f) }
 
 /**
  * The whole row of cards expands: every card grows from where it sits in the carousel to a full-screen page, side by side,
@@ -96,12 +113,15 @@ internal fun PostStory(
     startBounds: Rect,
     boundsOf: (String) -> Rect?,
     cardsStartPx: Float,
+    replyText: String,
+    onReplyTextChange: (String) -> Unit,
+    onSend: () -> Unit,
     onClosed: () -> Unit,
     onPageChanged: (String) -> Unit,
     progress: Animatable<Float, AnimationVector1D>,
     autoExpand: Boolean,
     holding: Boolean,
-    cardContent: @Composable (post: FeedPost, progress: Float) -> Unit,
+    cardContent: @Composable (post: FeedPost, progress: Float, effects: PostCardEffects) -> Unit,
 ) {
     val scope = rememberCoroutineScope()
     val density = LocalDensity.current
@@ -118,6 +138,25 @@ internal fun PostStory(
     val openIdNow by rememberUpdatedState(openId)
     val onPageChangedNow by rememberUpdatedState(onPageChanged)
     val lastIndex = (posts.size - 1).coerceAtLeast(0)
+    val comments = remember { CommentsState(scope) }
+
+    // Landscape view of a horizontal photo or video: when the phone is turned, the media turns with it and covers the screen.
+    val turn by LocalDeviceTurn.current
+    val bars = LocalSystemBars.current
+    val immersion = remember { Animatable(0f) }
+    var immersionSign by remember { mutableFloatStateOf(1f) }
+    val immersed by remember { derivedStateOf { immersion.value > 0f } }
+    val shownPost = posts[pos.value.roundToInt().coerceIn(0, lastIndex)]
+    val shownMedia = if (shownPost.type == PostType.Question) null else mediaPainter(shownPost.mediaKey)
+    val horizontalMedia = shownMedia?.intrinsicSize?.let { it.isSpecified && it.height > 0f && it.width > it.height } == true
+    val wantImmersion = turn != 0 && horizontalMedia && progress.value >= StorySpec.OPEN && !holding
+    LaunchedEffect(turn) { if (turn != 0) immersionSign = turn.toFloat() }
+    LaunchedEffect(wantImmersion) {
+        if (wantImmersion) comments.hideNow()
+        bars.setHidden(wantImmersion)
+        immersion.animateTo(if (wantImmersion) 1f else 0f, tween(StorySpec.IMMERSION_MILLIS, easing = SmootherStep))
+    }
+    DisposableEffect(Unit) { onDispose { bars.setHidden(false) } }
 
     // When the card is opened by dragging, the finger drives the progress instead.
     LaunchedEffect(Unit) { if (autoExpand) progress.animateTo(1f, spec) }
@@ -132,9 +171,9 @@ internal fun PostStory(
         }
     }
     fun close() = scope.launch { progress.animateTo(0f, spec); onClosed() }
-    HoopBackHandler(enabled = true) { close() }
+    HoopBackHandler(enabled = true) { if (comments.isShown) comments.hide() else close() }
 
-    Box(Modifier.fillMaxSize().imePadding()) {
+    Box(Modifier.fillMaxSize()) {
         val q = progress.value.coerceIn(0f, 1f)
         androidx.compose.foundation.layout.BoxWithConstraints(Modifier.fillMaxSize()) {
             val screenW = with(density) { maxWidth.toPx() }
@@ -146,7 +185,8 @@ internal fun PostStory(
             fun lerp(a: Float, b: Float) = a + (b - a) * q
             Box(
                 Modifier.fillMaxSize()
-                    .pointerInput(Unit) {
+                    .pointerInput(comments.isShown, immersed) {
+                        if (comments.isShown || immersed) return@pointerInput
                         detectVerticalDragGestures(
                             onDragStart = { verticalDrag = true },
                             onVerticalDrag = { _, dy -> scope.launch { progress.snapTo((progress.value - dy / dragPx).coerceIn(0f, 1.05f)) } },
@@ -160,7 +200,7 @@ internal fun PostStory(
                     .draggable(
                         rememberDraggableState { dx -> scope.launch { pos.snapTo((pos.value - dx / screenW).coerceIn(0f, lastIndex.toFloat())) } },
                         Orientation.Horizontal,
-                        enabled = q >= StorySpec.OPEN,
+                        enabled = q >= StorySpec.OPEN && !comments.isShown && !immersed,
                         onDragStopped = { velocity ->
                             scope.launch {
                                 // A fling carries at most to the neighbouring page.
@@ -184,7 +224,16 @@ internal fun PostStory(
                             .size(with(density) { width.toDp() }, with(density) { lerp(cardH, screenH).toDp() })
                             .shadow(HoopTheme.elevation.card * (1f - q), shape)
                             .clip(shape),
-                    ) { cardContent(post, q) }
+                    ) {
+                        val isShown = post.id == shownPost.id
+                        val effects = PostCardEffects(
+                            sheetProgress = { comments.open.value },
+                            onComments = { if (q >= StorySpec.OPEN) comments.show(post) },
+                            immersion = if (isShown) ({ immersion.value }) else ({ 0f }),
+                            immersionSign = immersionSign,
+                        )
+                        cardContent(post, q, effects)
+                    }
                 }
             }
         }
@@ -192,10 +241,39 @@ internal fun PostStory(
         val shownIndex = pos.value.roundToInt().coerceIn(0, lastIndex)
         HoopPageDots(
             posts.size, shownIndex,
-            Modifier.align(Alignment.BottomCenter).padding(bottom = StorySpec.dotsBottom + WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()).alpha(rampOf(q, StorySpec.DOTS_FADE)),
+            Modifier.align(Alignment.BottomCenter).padding(bottom = StorySpec.dotsBottom + WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()).alpha(rampOf(q, StorySpec.DOTS_FADE))
+                .graphicsLayer { alpha = 1f - rampOf(immersion.value, StorySpec.IMMERSION_FADE) },
             activeColor = if (posts[shownIndex].type == PostType.Question) HoopTheme.colors.onSurface else HoopTheme.colors.onScrim,
             inactiveColor = if (posts[shownIndex].type == PostType.Question) HoopTheme.colors.outlineStrong else HoopTheme.colors.onScrim.copy(alpha = 0.45f),
         )
+        // Comments: a veil darkens the post (cheaper than a filter), a tap on it closes the sheet, the sheet rises on top.
+        val sheetPostId = comments.postId
+        if (sheetPostId != null) {
+            Box(
+                Modifier.fillMaxSize().graphicsLayer { alpha = StorySpec.BEHIND_DIM * comments.open.value }.background(HoopTheme.colors.scrim)
+                    .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null) { comments.hide() },
+            )
+            val sheetPost = posts.firstOrNull { it.id.value == sheetPostId }
+            if (sheetPost != null) {
+                CommentsSheet(
+                    post = sheetPost, state = comments,
+                    replyText = replyText, onReplyTextChange = onReplyTextChange, onSend = onSend,
+                    bottomInset = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding(),
+                )
+            }
+        }
+    }
+}
+
+/** What a card needs from the story around it: the comments sheet, and the landscape view of horizontal media. */
+internal class PostCardEffects(
+    val sheetProgress: () -> Float,
+    val onComments: () -> Unit,
+    val immersion: () -> Float = { 0f },
+    val immersionSign: Float = 1f,
+) {
+    companion object {
+        val None = PostCardEffects(sheetProgress = { 0f }, onComments = {})
     }
 }
 

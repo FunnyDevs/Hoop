@@ -15,7 +15,7 @@ class MainActivity : ComponentActivity(), KoinComponent {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
         permissionRequester.attach(this)
-        setContent { App() }
+        setContent { ProvideDeviceTurn { App() } }
     }
 
     override fun onDestroy() {
