@@ -83,35 +83,26 @@
 
     <!-- Password recovery -->
     <string name="recovery_email_title">Password dimenticata?</string>
-    <string name="recovery_email_subtitle">Scrivi l'email del tuo account: ti mandiamo un link per sceglierne una nuova.</string>
+    <string name="recovery_email_subtitle">Scrivi l'email del tuo account: ti mandiamo un link per sceglierne una nuova sul sito.</string>
     <string name="recovery_send_link">Invia il link</string>
     <string name="recovery_remembered">Ti è tornata in mente?</string>
     <string name="recovery_sign_in">Accedi</string>
     <string name="recovery_mail_title">Controlla la posta</string>
     <string name="recovery_mail_body_before">Abbiamo mandato un link a </string>
-    <string name="recovery_mail_body_after">. Vale 30 minuti.</string>
+    <string name="recovery_mail_body_after">. Aprilo, scegli la nuova password e poi torna qui per accedere.</string>
     <string name="recovery_mail_description">Email</string>
     <string name="recovery_open_mail">Apri l'app di posta</string>
-    <string name="recovery_simulate_link">Simula il tocco sul link</string>
     <string name="recovery_not_arrived">Non è arrivata?</string>
     <string name="recovery_resend">Invia di nuovo</string>
     <string name="recovery_resend_in">tra %1$s</string>
     <string name="recovery_check_spam">Controlla anche nella cartella dello spam.</string>
-    <string name="recovery_new_title">Scegli una nuova password</string>
-    <string name="recovery_new_subtitle">Deve essere diversa dall'ultima che hai usato.</string>
-    <string name="field_new_password">Nuova password</string>
-    <string name="field_repeat_password">Ripeti la password</string>
-    <string name="passwords_match">Le password coincidono</string>
-    <string name="passwords_mismatch">Le password non coincidono.</string>
-    <string name="recovery_save_password">Salva la password</string>
-    <string name="recovery_done_title">Password cambiata</string>
-    <string name="recovery_done_body">Ora puoi accedere con la nuova password.</string>
     <string name="recovery_go_sign_in">Vai all'accesso</string>
 
     <!-- Domain errors -->
     <string name="error_invalid_credentials">Email o password non corrette. Riprova oppure reimposta la password.</string>
     <string name="error_email_already_used">Questa email è già registrata.</string>
     <string name="error_username_taken">Questo nome utente è già in uso.</string>
+    <string name="error_wrong_password">La password attuale non è corretta.</string>
     <string name="error_unauthorized">Sessione scaduta. Accedi di nuovo.</string>
     <string name="error_location_permission_denied">Senza il permesso di posizione non posso mostrarti cosa succede intorno a te. Puoi continuare e scegliere la zona dopo.</string>
     <string name="error_location_unavailable">Non riesco a leggere la tua posizione.</string>

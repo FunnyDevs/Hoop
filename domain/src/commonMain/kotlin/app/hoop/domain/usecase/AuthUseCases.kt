@@ -52,7 +52,11 @@ class CheckUsernameAvailabilityUseCase(private val auth: AuthRepository) {
         Username.create(username).flatMap { auth.checkAvailability(username = it, email = null) }
 }
 
-class ConfirmPasswordResetUseCase(private val auth: AuthRepository) {
-    suspend operator fun invoke(newPassword: String): DomainResult<Unit> =
-        Password.create(newPassword).flatMap { auth.confirmPasswordReset(it) }
+class ChangePasswordUseCase(private val auth: AuthRepository) {
+    suspend operator fun invoke(current: String, new: String): DomainResult<Unit> =
+        Password.create(new).flatMap { newPassword -> auth.changePassword(Password.ofExisting(current), newPassword) }
+}
+
+class RestoreSessionUseCase(private val auth: AuthRepository) {
+    suspend operator fun invoke(): Boolean = auth.restoreSession()
 }

@@ -36,7 +36,7 @@ The rule is verified automatically: `./gradlew checkArchitecture` (it also runs 
 
 The domain defines the interfaces (`AuthRepository`, …); `data` implements them; the app wires them in `composeApp/.../di/Koin.kt`. The domain does not know Koin: use cases are registered in the app's `di/DomainModule.kt`. Each layer exposes its own module (`dataModule(config)`, `onboardingPresentationModule`). ViewModels receive their dependencies through the constructor.
 
-The Parse server is never in the code: `ParseConfig` comes from `local.properties` (`hoop.parse.baseUrl`, `hoop.parse.applicationId`, `hoop.parse.clientKey`, not versioned) on Android and from `Info.plist` on iOS. Without configuration the app uses `FakeAuthRepository`.
+The Parse server is never in the code: `ParseConfig` comes from `local.properties` (not versioned) on Android and from `Info.plist` on iOS. On Android there is one build flavor per server (`local`, `staging`, `production`): each reads `hoop.parse.<flavor>.baseUrl|applicationId|clientKey`, falling back to `hoop.parse.baseUrl|applicationId|clientKey`. Only `local` allows plain http. Without configuration the app uses `FakeAuthRepository`.
 
 ## Theme and design system
 
@@ -45,7 +45,7 @@ Anatomy: **tokens → theme → components**.
 - Tokens: `HoopPalette` (the only place with hexadecimal values, internal), `HoopColors` (semantic roles), `HoopTypography`, `HoopShapes`, `HoopSpacing`, `HoopSizes`, `HoopElevation`, `HoopMotion`.
 - Theme: `HoopTheme { }` provides the tokens through `CompositionLocal` and maps Material3 to them; read them with `HoopTheme.colors`, `HoopTheme.typography`, ...
 - Components: `HoopButton` (+ `HoopButtonDefaults`), `HoopBrandIconButton`, `HoopLabeledDivider`, `HoopLogoBadge`, `HoopCardFrame`, `HoopMediaCard`, `HoopQuestionCard`, `HoopUserChip`, `HoopPlayBadge`, `HoopMapBackdrop`, `HoopRadiusMap` (real MapLibre map with an offline fallback). Texts and images come from the caller.
-- Light theme only. Static Fraunces and Figtree fonts in `core/designsystem/src/commonMain/composeResources/font`.
+- Light theme only. Static Bricolage Grotesque and Figtree fonts in `core/designsystem/src/commonMain/composeResources/font`.
 
 ## Text and constants
 

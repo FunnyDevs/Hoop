@@ -24,10 +24,16 @@ interface AuthRepository {
     suspend fun signIn(identifier: LoginIdentifier, password: Password): DomainResult<User>
     suspend fun signUp(request: SignUpRequest): DomainResult<User>
     suspend fun requestPasswordReset(email: Email): DomainResult<Unit>
-    /** Completes a password reset started from the emailed link. */
-    suspend fun confirmPasswordReset(newPassword: Password): DomainResult<Unit>
+    /** Changes the password of the signed-in user, who must give the current one. */
+    suspend fun changePassword(current: Password, new: Password): DomainResult<Unit>
     suspend fun checkAvailability(username: Username?, email: Email?): DomainResult<Availability>
     suspend fun signOut()
+    /**
+     * Restores the session saved by a previous launch. Returns true if the user is still signed in
+     * (also when the server cannot be reached, so the app opens offline), false if there is no saved
+     * session or the server says it is no longer valid; in that case it is deleted.
+     */
+    suspend fun restoreSession(): Boolean
 }
 
 class SignUpRequest(

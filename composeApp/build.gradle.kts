@@ -8,12 +8,17 @@ plugins {
     alias(libs.plugins.composeCompiler)
 }
 
-// Parse server configuration: read from local.properties (not versioned) or Gradle properties.
-// No address or key in the code.
-fun parseSetting(key: String): String {
+// Settings are read from local.properties (not versioned) or Gradle properties. No address or key in the code.
+fun setting(key: String): String? {
     val local = Properties().apply { rootProject.file("local.properties").takeIf { it.exists() }?.inputStream()?.use(::load) }
-    return local.getProperty(key) ?: providers.gradleProperty(key).orNull.orEmpty()
+    return local.getProperty(key) ?: providers.gradleProperty(key).orNull
 }
+
+fun parseSetting(key: String): String = setting(key).orEmpty()
+
+// Parse server of a flavor: hoop.parse.<flavor>.<name>, else hoop.parse.<name> (a server shared by every flavor).
+fun flavorParseSetting(flavor: String, name: String): String =
+    setting("hoop.parse.$flavor.$name") ?: setting("hoop.parse.$name").orEmpty()
 
 kotlin {
     androidTarget {
@@ -41,6 +46,7 @@ kotlin {
             implementation(libs.navigation.compose)
             implementation(libs.koin.core)
             implementation(libs.koin.compose.viewmodel)
+            implementation(libs.kermit)
         }
         androidMain.dependencies {
             implementation(libs.androidx.activity.compose)
@@ -57,12 +63,41 @@ android {
         targetSdk = 35
         versionCode = 1
         versionName = "0.1.0"
-        buildConfigField("String", "PARSE_BASE_URL", "\"${parseSetting("hoop.parse.baseUrl")}\"")
-        buildConfigField("String", "PARSE_APPLICATION_ID", "\"${parseSetting("hoop.parse.applicationId")}\"")
-        buildConfigField("String", "PARSE_CLIENT_KEY", "\"${parseSetting("hoop.parse.clientKey")}\"")
+        manifestPlaceholders["appLabel"] = "Hoop"
         buildConfigField("String", "MAP_STYLE_URI", "\"${parseSetting("hoop.map.styleUri")}\"")
         buildConfigField("double", "MAP_FALLBACK_LATITUDE", parseSetting("hoop.map.fallbackLatitude").ifBlank { "0" })
         buildConfigField("double", "MAP_FALLBACK_LONGITUDE", parseSetting("hoop.map.fallbackLongitude").ifBlank { "0" })
+    }
+    // One build per server: local (the Parse Server on this Mac), staging and production. Local and staging get their own
+    // package name, so they can be installed next to the real app.
+    flavorDimensions += "server"
+    productFlavors {
+        create("local") {
+            dimension = "server"
+            applicationIdSuffix = ".local"
+            versionNameSuffix = "-local"
+            manifestPlaceholders["appLabel"] = "Hoop Local"
+        }
+        create("staging") {
+            dimension = "server"
+            applicationIdSuffix = ".staging"
+            versionNameSuffix = "-staging"
+            manifestPlaceholders["appLabel"] = "Hoop Staging"
+        }
+        create("production") {
+            dimension = "server"
+        }
+        configureEach {
+            val flavor = name
+            buildConfigField("String", "PARSE_BASE_URL", "\"${flavorParseSetting(flavor, "baseUrl")}\"")
+            buildConfigField("String", "PARSE_APPLICATION_ID", "\"${flavorParseSetting(flavor, "applicationId")}\"")
+            buildConfigField("String", "PARSE_CLIENT_KEY", "\"${flavorParseSetting(flavor, "clientKey")}\"")
+        }
+    }
+    // Kotlin Multiplatform names the flavor folders "android<Flavor>": point Android's source set to it explicitly.
+    sourceSets.getByName("local") {
+        manifest.srcFile("src/androidLocal/AndroidManifest.xml")
+        res.srcDir("src/androidLocal/res")
     }
     buildFeatures { buildConfig = true }
     compileOptions {

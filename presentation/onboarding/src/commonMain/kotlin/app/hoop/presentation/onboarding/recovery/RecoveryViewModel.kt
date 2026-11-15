@@ -8,9 +8,6 @@ import app.hoop.domain.common.Violation
 import app.hoop.domain.common.fold
 import app.hoop.domain.common.getOrNull
 import app.hoop.domain.identity.Email
-import app.hoop.domain.identity.Password
-import app.hoop.domain.identity.PasswordStrength
-import app.hoop.domain.usecase.ConfirmPasswordResetUseCase
 import app.hoop.domain.usecase.RequestPasswordResetUseCase
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.channels.Channel
@@ -23,10 +20,9 @@ import kotlinx.coroutines.flow.receiveAsFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 
-/** Shared by the four recovery screens: it is scoped to the recovery navigation graph. */
+/** Shared by the two recovery screens (the new password is chosen on the web page linked from the email): it is scoped to the recovery navigation graph. */
 class RecoveryViewModel(
     private val requestReset: RequestPasswordResetUseCase,
-    private val confirmReset: ConfirmPasswordResetUseCase,
 ) : ViewModel() {
     private val _state = MutableStateFlow(RecoveryUiState())
     val state: StateFlow<RecoveryUiState> = _state.asStateFlow()
@@ -42,13 +38,6 @@ class RecoveryViewModel(
             RecoveryIntent.SendLinkClicked -> sendLink(navigateOnSuccess = true)
             RecoveryIntent.ResendClicked -> if (_state.value.resendSecondsLeft == 0) sendLink(navigateOnSuccess = false)
             RecoveryIntent.OpenMailClicked -> emit(RecoveryEffect.OpenMailApp)
-            RecoveryIntent.SimulateLinkClicked -> emit(RecoveryEffect.NavigateTo(RecoveryStep.NewPassword))
-            is RecoveryIntent.NewPasswordChanged -> _state.update {
-                it.copy(newPassword = intent.value, passwordStrength = PasswordStrength.of(intent.value), passwordError = null)
-            }
-            is RecoveryIntent.RepeatPasswordChanged -> _state.update { it.copy(repeatPassword = intent.value, passwordError = null) }
-            is RecoveryIntent.PasswordVisibilityChanged -> _state.update { it.copy(passwordVisible = intent.visible) }
-            RecoveryIntent.SavePasswordClicked -> savePassword()
             RecoveryIntent.SignInClicked -> emit(RecoveryEffect.GoToSignIn)
             RecoveryIntent.BackClicked -> emit(RecoveryEffect.NavigateBack)
         }
@@ -81,26 +70,6 @@ class RecoveryViewModel(
                 _state.update { it.copy(resendSecondsLeft = left) }
                 if (left > 0) delay(ONE_SECOND_MILLIS)
             }
-        }
-    }
-
-    private fun savePassword() {
-        val current = _state.value
-        if (current.isLoading) return
-        if (Password.create(current.newPassword).getOrNull() == null) {
-            _state.update { it.copy(passwordError = DomainError.Validation(Violation.PasswordTooShort)) }
-            return
-        }
-        if (!current.passwordsMatch) return // the screen already marks the mismatch and disables the button
-        _state.update { it.copy(isLoading = true, error = null) }
-        viewModelScope.launch {
-            confirmReset(current.newPassword).fold(
-                onSuccess = {
-                    _state.update { it.copy(isLoading = false) }
-                    emit(RecoveryEffect.PasswordChanged)
-                },
-                onFailure = { error -> _state.update { it.copy(isLoading = false, error = error) } },
-            )
         }
     }
 

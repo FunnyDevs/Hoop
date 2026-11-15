@@ -7,10 +7,14 @@ import kotlinx.serialization.Serializable
 internal data class UserDto(
     val objectId: String,
     val username: String,
-    val email: String,
+    /** Missing in the answer of /login: it is then read with /users/me. */
+    val email: String? = null,
     val name: String? = null,
     val sessionToken: String? = null,
 )
+
+@Serializable
+internal data class LoginBody(val username: String, val password: String)
 
 @Serializable
 internal data class FunctionResponse<T>(val result: T)
@@ -39,3 +43,6 @@ internal data class AvailabilityBody(val username: String? = null, val email: St
 
 @Serializable
 internal data class PasswordResetBody(val email: String)
+
+@Serializable
+internal data class ChangePasswordBody(val oldPassword: String, val newPassword: String)

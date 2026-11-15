@@ -11,6 +11,7 @@ fun DomainError.messageRes(): StringResource = when (this) {
     DomainError.InvalidCredentials -> Res.string.error_invalid_credentials
     DomainError.EmailAlreadyUsed -> Res.string.error_email_already_used
     DomainError.UsernameTaken -> Res.string.error_username_taken
+    DomainError.WrongPassword -> Res.string.error_wrong_password
     DomainError.Unauthorized -> Res.string.error_unauthorized
     DomainError.LocationPermissionDenied -> Res.string.error_location_permission_denied
     DomainError.LocationUnavailable -> Res.string.error_location_unavailable

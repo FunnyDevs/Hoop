@@ -23,7 +23,7 @@ Hoop is a proximity-based social network. Each user sees what happens within an 
 **Light** theme (no night theme). The design is a fusion of two proposals: a full-screen map with large serif cards, and Hoops as Stories-like circles with a mini-map inside.
 
 - **Colors:** orange accent `#E67E22` (`accent` of the old project), dark gray primary `#373E41` (`outer_space`), dark orange `#CD6509` for text. For links on white use `#A65300` (sufficient contrast).
-- **Fonts:** Fraunces (headings) and Figtree (body).
+- **Fonts:** Bricolage Grotesque 700 (headings, logo, big numbers) and Figtree (body).
 - **Post cards:** photos and videos fill the **whole** card frame, with the text overlaid. Questions are colored cards (yellow `#FFE8A8`, etc.).
 - **Welcome:** the "Fading map" proposal, i.e. a collage of tilted cards over the map that fades into the light background, with "Create an account", "Sign in" and Google, Facebook, Apple. No hard white panel.
 
@@ -37,7 +37,7 @@ Spring physics, not fixed curves.
 
 ## Sign-in flow
 
-Screens: welcome, sign in (including wrong credentials), 4-step sign-up (email and password with a typo hint such as `gmial.com` and a strength meter, username with availability check and terms, location permission, radius of the first Hoop), final screen. 4-step password recovery: email, check your inbox with a resend after 20 seconds, new password, confirmation.
+Screens: welcome, sign in (including wrong credentials), 4-step sign-up (email and password with a typo hint such as `gmial.com` and a strength meter, username with availability check and terms, location permission, radius of the first Hoop), final screen. 2-step password recovery: email, check your inbox (resend after 20 seconds); the new password is chosen on the web page that Parse Server serves from the emailed link, styled like Hoop by the server.
 
 ## References (prototypes and design)
 
@@ -56,7 +56,7 @@ The photos in the prototypes are placeholders from Pexels.
 - Architecture from scratch: Kotlin 2.1, Compose Multiplatform 1.7.3, JetBrains navigation, Koin, Ktor, kotlinx.serialization. SQLDelight will be added when local persistence is needed.
 - Map: MapLibre Compose 0.6.0 (`dev.sargunv.maplibre-compose`, the last version compatible with Kotlin 2.1 / Compose Multiplatform 1.7.3). It is used in the radius step of sign-up (`HoopRadiusMap`); style and fallback center come from `gradle.properties` (`hoop.map.*`, free OpenFreeMap light style). The welcome and location screens still use drawn illustrations (`HoopMapBackdrop`, `HoopLocationMap`). When the style cannot load (offline) the radius step shows the drawn map as a fallback.
 - Backend: Parse is kept and called via REST with Ktor (a PHP backend would still need a VPS, so no savings). The new server is Parse Server 9 in `/Users/pierfrancesco/WebstormProjects/Hoop-server` (functions `signUp`, `checkAvailability`, `requestPasswordReset`); the old server is in `/Users/pierfrancesco/Projects/Hoop-server` (read-only). The old project's `settings.gradle` contains a secret Mapbox token in plain text: it must be revoked and never copied.
-- Static fonts generated from the OFL variable fonts (Fraunces opsz 72, Figtree) in `core/designsystem/src/commonMain/composeResources/font`.
+- Static fonts generated from the OFL variable fonts (Bricolage Grotesque 700 at opsz 36, Figtree) in `core/designsystem/src/commonMain/composeResources/font`.
 - Location: the `LocationProvider` port (domain) is implemented per platform in `composeApp`: Android uses the platform `LocationManager` plus a runtime permission bridge (`ActivityPermissionRequester`, attached by `MainActivity`); iOS uses CoreLocation (`IosLocationProvider`, written but never compiled, needs `NSLocationWhenInUseUsageDescription`). Both are wired through `initKoin(platformModules)`.
 - iOS: the code is there (`MainViewController`) but there is no Xcode project, and Xcode is not installed on this machine, so iOS has never been compiled.
 
@@ -66,11 +66,11 @@ The up-to-date design of the home and its states lives in the same canvas as the
 
 ## Architecture
 
-Multi-module project with Clean Architecture and DDD: see `ARCHITECTURE.md` (modules `domain`, `data`, `core:designsystem`, `presentation:onboarding`, `composeApp`). Rules are verified by `./gradlew checkArchitecture`, which also runs on every app build. No hardcoded string, color or address: strings in `composeResources/values`, colors in tokens, server from `local.properties` (`hoop.parse.baseUrl`, `hoop.parse.applicationId`, `hoop.parse.clientKey`). All code comments are written in English.
+Multi-module project with Clean Architecture and DDD: see `ARCHITECTURE.md` (modules `domain`, `data`, `core:designsystem`, `presentation:onboarding`, `composeApp`). Rules are verified by `./gradlew checkArchitecture`, which also runs on every app build. No hardcoded string, color or address: strings in `composeResources/values`, colors in tokens, server from `local.properties`, one set per flavor (`hoop.parse.<local|staging|production>.baseUrl|applicationId|clientKey`). All code comments are written in English.
 
 ## Commands
 
-- Android build: `JAVA_HOME="/Applications/Android Studio.app/Contents/jbr/Contents/Home" ./gradlew :composeApp:assembleDebug`
+- Android build: `JAVA_HOME="/Applications/Android Studio.app/Contents/jbr/Contents/Home" ./gradlew :composeApp:assembleLocalDebug` (flavors `local`, `staging`, `production`; package `app.hoop.local`, `app.hoop.staging`, `app.hoop`)
 - Tests: `./gradlew :domain:testDebugUnitTest :data:testDebugUnitTest`
 - Architecture rules: `./gradlew checkArchitecture`
 

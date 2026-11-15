@@ -34,7 +34,7 @@ import app.hoop.presentation.onboarding.messageRes
 import app.hoop.presentation.onboarding.resources.*
 import org.jetbrains.compose.resources.stringResource
 
-/** Step 1 of 4: email of the account. */
+/** Step 1 of 2: email of the account. */
 @Composable
 fun RecoveryEmailScreen(state: RecoveryUiState, onIntent: (RecoveryIntent) -> Unit) {
     AuthScreenFrame(
@@ -74,9 +74,9 @@ private object MailIllustrationSpec {
     const val INNER_ALPHA = 0.4f
 }
 
-/** Step 2 of 4: check the mailbox. */
+/** Step 2 of 2: check the mailbox; the new password is chosen on the web page opened from the email. */
 @Composable
-fun RecoveryCheckMailScreen(state: RecoveryUiState, showLinkSimulator: Boolean, onIntent: (RecoveryIntent) -> Unit) {
+fun RecoveryCheckMailScreen(state: RecoveryUiState, onIntent: (RecoveryIntent) -> Unit) {
     val spacing = HoopTheme.spacing
     val canResend = state.resendSecondsLeft == 0
     AuthScreenFrame(
@@ -84,9 +84,7 @@ fun RecoveryCheckMailScreen(state: RecoveryUiState, showLinkSimulator: Boolean, 
         actions = {
             Column(verticalArrangement = Arrangement.spacedBy(spacing.sm)) {
                 HoopButton(stringResource(Res.string.recovery_open_mail), { onIntent(RecoveryIntent.OpenMailClicked) })
-                if (showLinkSimulator) {
-                    HoopButton(stringResource(Res.string.recovery_simulate_link), { onIntent(RecoveryIntent.SimulateLinkClicked) }, style = HoopButtonStyle.Secondary)
-                }
+                HoopButton(stringResource(Res.string.recovery_go_sign_in), { onIntent(RecoveryIntent.SignInClicked) }, style = HoopButtonStyle.Secondary)
             }
             Text(
                 hoopLinkedText(
@@ -128,73 +126,6 @@ fun RecoveryCheckMailScreen(state: RecoveryUiState, showLinkSimulator: Boolean, 
             textAlign = TextAlign.Center,
         )
     }
-}
-
-/** Step 3 of 4: choose a new password. */
-@Composable
-fun RecoveryNewPasswordScreen(state: RecoveryUiState, onIntent: (RecoveryIntent) -> Unit) {
-    val spacing = HoopTheme.spacing
-    val mismatch = state.repeatPassword.isNotEmpty() && !state.passwordsMatch
-    AuthScreenFrame(
-        onBack = { onIntent(RecoveryIntent.BackClicked) },
-        actions = {
-            HoopButton(
-                stringResource(Res.string.recovery_save_password),
-                { onIntent(RecoveryIntent.SavePasswordClicked) },
-                enabled = state.passwordsMatch && state.newPassword.isNotEmpty(),
-                loading = state.isLoading,
-            )
-        },
-    ) {
-        ScreenHeading(stringResource(Res.string.recovery_new_title), stringResource(Res.string.recovery_new_subtitle))
-        if (state.error != null) HoopErrorBanner(stringResource(state.error.messageRes()), Modifier.padding(bottom = spacing.md))
-        HoopPasswordField(
-            label = stringResource(Res.string.field_new_password),
-            value = state.newPassword,
-            onValueChange = { onIntent(RecoveryIntent.NewPasswordChanged(it)) },
-            visible = state.passwordVisible,
-            onVisibilityChange = { onIntent(RecoveryIntent.PasswordVisibilityChanged(it)) },
-            showDescription = stringResource(Res.string.password_show),
-            hideDescription = stringResource(Res.string.password_hide),
-            state = if (state.passwordError != null) HoopFieldState.Error else HoopFieldState.Default,
-            supportingText = state.passwordError?.let { stringResource(it.messageRes()) },
-            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password, imeAction = ImeAction.Next),
-        )
-        Spacer(Modifier.height(spacing.sm))
-        HoopStrengthMeter(state.passwordStrength.level(), STRENGTH_LEVELS, state.passwordStrength.color(), state.passwordStrength.caption())
-        Spacer(Modifier.height(spacing.md))
-        HoopPasswordField(
-            label = stringResource(Res.string.field_repeat_password),
-            value = state.repeatPassword,
-            onValueChange = { onIntent(RecoveryIntent.RepeatPasswordChanged(it)) },
-            visible = state.passwordVisible,
-            onVisibilityChange = { onIntent(RecoveryIntent.PasswordVisibilityChanged(it)) },
-            showDescription = stringResource(Res.string.password_show),
-            hideDescription = stringResource(Res.string.password_hide),
-            state = when {
-                state.passwordsMatch -> HoopFieldState.Success
-                mismatch -> HoopFieldState.Error
-                else -> HoopFieldState.Default
-            },
-            supportingText = if (mismatch) stringResource(Res.string.passwords_mismatch) else null,
-            successContentDescription = stringResource(Res.string.passwords_match),
-            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password, imeAction = ImeAction.Done),
-            keyboardActions = KeyboardActions(onDone = { onIntent(RecoveryIntent.SavePasswordClicked) }),
-        )
-    }
-}
-
-/** Step 4 of 4: password changed. */
-@Composable
-fun RecoveryDoneScreen(onSignIn: () -> Unit) {
-    DoneScreenFrame(
-        badgeColor = HoopTheme.colors.success,
-        ringColor = HoopTheme.colors.success,
-        title = stringResource(Res.string.recovery_done_title),
-        body = stringResource(Res.string.recovery_done_body),
-        actionLabel = stringResource(Res.string.recovery_go_sign_in),
-        onAction = onSignIn,
-    )
 }
 
 private const val SECONDS_PER_MINUTE = 60

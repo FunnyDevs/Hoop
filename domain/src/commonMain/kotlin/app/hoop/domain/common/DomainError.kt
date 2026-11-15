@@ -4,6 +4,8 @@ package app.hoop.domain.common
 sealed interface DomainError {
     data class Validation(val violation: Violation) : DomainError
     data object InvalidCredentials : DomainError
+    /** The current password given to change it is wrong. */
+    data object WrongPassword : DomainError
     data object EmailAlreadyUsed : DomainError
     data object UsernameTaken : DomainError
     data object Unauthorized : DomainError

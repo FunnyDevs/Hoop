@@ -41,8 +41,6 @@ object OnboardingRoute {
     const val RECOVERY_GRAPH = "recovery"
     private const val RECOVERY_EMAIL = "recovery/email"
     private const val RECOVERY_CHECK_MAIL = "recovery/check_mail"
-    private const val RECOVERY_NEW_PASSWORD = "recovery/new_password"
-    const val RECOVERY_DONE = "recovery_done"
 
     internal fun signUpStep(step: SignUpStep) = when (step) {
         SignUpStep.Credentials -> SIGN_UP_CREDENTIALS
@@ -54,7 +52,6 @@ object OnboardingRoute {
     internal fun recoveryStep(step: RecoveryStep) = when (step) {
         RecoveryStep.Email -> RECOVERY_EMAIL
         RecoveryStep.CheckMail -> RECOVERY_CHECK_MAIL
-        RecoveryStep.NewPassword -> RECOVERY_NEW_PASSWORD
     }
 
     internal fun signUpDone(username: String, radiusMeters: Int) = "$SIGN_UP_DONE/$username/$radiusMeters"
@@ -68,7 +65,7 @@ object OnboardingRoute {
 
 /**
  * Adds every onboarding destination to a NavHost: welcome, sign in, sign up (4 steps + done)
- * and password recovery (3 steps + done). Calls back into the app for what lives outside onboarding.
+ * and password recovery (2 steps). Calls back into the app for what lives outside onboarding.
  */
 fun NavGraphBuilder.onboardingGraph(
     navController: NavHostController,
@@ -150,9 +147,6 @@ fun NavGraphBuilder.onboardingGraph(
                 is RecoveryEffect.NavigateTo -> navController.navigate(OnboardingRoute.recoveryStep(effect.step))
                 RecoveryEffect.NavigateBack -> navController.popBackStack()
                 RecoveryEffect.OpenMailApp -> onOpenMailApp()
-                RecoveryEffect.PasswordChanged -> navController.navigate(OnboardingRoute.RECOVERY_DONE) {
-                    popUpTo(OnboardingRoute.RECOVERY_GRAPH) { inclusive = true }
-                }
                 RecoveryEffect.GoToSignIn -> navController.navigate(OnboardingRoute.SIGN_IN) { popUpTo(OnboardingRoute.WELCOME) }
             }
         }
@@ -163,21 +157,9 @@ fun NavGraphBuilder.onboardingGraph(
         }
         composable(OnboardingRoute.recoveryStep(RecoveryStep.CheckMail)) { entry ->
             val vm = graphViewModel<RecoveryViewModel>(navController, entry, OnboardingRoute.RECOVERY_GRAPH)
-            val config: OnboardingConfig = koinInject()
             Collect(vm.effects, handle)
-            RecoveryCheckMailScreen(vm.state.collectAsState().value, config.showResetLinkSimulator, vm::onIntent)
+            RecoveryCheckMailScreen(vm.state.collectAsState().value, vm::onIntent)
         }
-        composable(OnboardingRoute.recoveryStep(RecoveryStep.NewPassword)) { entry ->
-            val vm = graphViewModel<RecoveryViewModel>(navController, entry, OnboardingRoute.RECOVERY_GRAPH)
-            Collect(vm.effects, handle)
-            RecoveryNewPasswordScreen(vm.state.collectAsState().value, vm::onIntent)
-        }
-    }
-
-    composable(OnboardingRoute.RECOVERY_DONE) {
-        RecoveryDoneScreen(onSignIn = {
-            navController.navigate(OnboardingRoute.SIGN_IN) { popUpTo(OnboardingRoute.WELCOME) }
-        })
     }
 }
 

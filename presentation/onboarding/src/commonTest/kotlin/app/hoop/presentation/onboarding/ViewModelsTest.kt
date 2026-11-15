@@ -37,7 +37,7 @@ class ViewModelsTest {
         CheckEmailAvailabilityUseCase(repository), CheckUsernameAvailabilityUseCase(repository),
         SignUpUseCase(repository), RequestLocationUseCase(location), EmailTypoDetector(),
     )
-    private fun recovery() = RecoveryViewModel(RequestPasswordResetUseCase(repository), ConfirmPasswordResetUseCase(repository))
+    private fun recovery() = RecoveryViewModel(RequestPasswordResetUseCase(repository))
 
     @Test fun signInWithWrongCredentialsShowsError() = runTest(dispatcher) {
         repository.wrongLogin = "errore@hoop.app"
@@ -165,19 +165,5 @@ class ViewModelsTest {
         advanceUntilIdle()
         assertTrue(vm.state.value.emailError != null)
         assertEquals(0, repository.resetRequests)
-    }
-
-    @Test fun newPasswordMustMatchBeforeSaving() = runTest(dispatcher) {
-        val vm = recovery()
-        vm.onIntent(RecoveryIntent.NewPasswordChanged("hoop2026!"))
-        vm.onIntent(RecoveryIntent.RepeatPasswordChanged("diversa"))
-        vm.onIntent(RecoveryIntent.SavePasswordClicked)
-        advanceUntilIdle()
-        assertNull(repository.confirmedPassword)
-        vm.onIntent(RecoveryIntent.RepeatPasswordChanged("hoop2026!"))
-        vm.onIntent(RecoveryIntent.SavePasswordClicked)
-        advanceUntilIdle()
-        assertEquals("hoop2026!", repository.confirmedPassword)
-        assertEquals(RecoveryEffect.PasswordChanged, vm.effects.first())
     }
 }

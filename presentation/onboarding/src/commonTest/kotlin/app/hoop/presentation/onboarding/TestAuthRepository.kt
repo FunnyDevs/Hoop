@@ -22,13 +22,14 @@ class TestAuthRepository : AuthRepository {
     var takenUsernames = setOf<String>()
     var wrongLogin: String? = null
     var resetRequests = 0
-    var confirmedPassword: String? = null
 
     override val currentUser: Flow<User?> = MutableStateFlow(null)
 
     override suspend fun signIn(identifier: LoginIdentifier, password: Password): DomainResult<User> =
         if (identifier.value == wrongLogin) DomainResult.failure(DomainError.InvalidCredentials)
         else DomainResult.success(user("demo", "demo@hoop.app"))
+
+    override suspend fun changePassword(current: Password, new: Password): DomainResult<Unit> = DomainResult.success(Unit)
 
     override suspend fun signUp(request: SignUpRequest): DomainResult<User> =
         DomainResult.success(User(UserId("1"), request.username, request.email, request.username.value))
@@ -38,15 +39,12 @@ class TestAuthRepository : AuthRepository {
         return DomainResult.success(Unit)
     }
 
-    override suspend fun confirmPasswordReset(newPassword: Password): DomainResult<Unit> {
-        confirmedPassword = newPassword.value
-        return DomainResult.success(Unit)
-    }
 
     override suspend fun checkAvailability(username: Username?, email: Email?): DomainResult<Availability> =
         DomainResult.success(Availability(username?.value in takenUsernames, email?.value in takenEmails))
 
     override suspend fun signOut() = Unit
+    override suspend fun restoreSession() = false
 
     private fun user(name: String, mail: String): User {
         val u = (Username.create(name) as DomainResult.Success).value

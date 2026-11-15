@@ -9,13 +9,24 @@ import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.slideInHorizontally
 import androidx.compose.animation.slideOutHorizontally
+import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalUriHandler
 import androidx.navigation.NavBackStackEntry
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
+import org.koin.compose.koinInject
+import app.hoop.domain.usecase.RestoreSessionUseCase
 import app.hoop.presentation.home.HomeRoute
 import app.hoop.presentation.onboarding.navigation.OnboardingRoute
 import app.hoop.presentation.onboarding.navigation.onboardingGraph
@@ -45,11 +56,22 @@ private const val MAIL_SCHEME = "mailto:"
 
 @Composable
 internal fun HoopNavHost(modifier: Modifier = Modifier) {
+    // The start screen depends on the saved session: until it is known the themed background shows.
+    val restoreSession = koinInject<RestoreSessionUseCase>()
+    var startDestination by remember { mutableStateOf<String?>(null) }
+    LaunchedEffect(Unit) {
+        startDestination = if (restoreSession()) HoopRoute.HOME else OnboardingRoute.WELCOME
+    }
+    val start = startDestination
+    if (start == null) {
+        Box(modifier.fillMaxSize().background(MaterialTheme.colorScheme.background))
+        return
+    }
     val navController = rememberNavController()
     val uriHandler = LocalUriHandler.current
     NavHost(
         navController = navController,
-        startDestination = OnboardingRoute.WELCOME,
+        startDestination = start,
         modifier = modifier,
         enterTransition = NavTransitions.enter,
         exitTransition = NavTransitions.exit,
