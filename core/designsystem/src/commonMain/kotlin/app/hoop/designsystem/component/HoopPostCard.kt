@@ -147,9 +147,7 @@ object HoopPostCardDefaults {
     val TopScrimFade = 0.2f to 0.7f
 
     // Comments sheet: how the pills react while it rises (ranges of the sheet progress).
-    val SheetFlyFade = 0f to 0.3f
     val SheetChipFade = 0f to 0.25f
-    val SheetFlyDrop: Dp = 20.dp
     /** Landscape view: the post's elements fade out over this range of the immersion progress. */
     val ImmersionFade = 0f to 0.3f
 }
@@ -323,12 +321,6 @@ fun HoopPostCard(
                 HoopIcons.Fly, HoopIcons.Fly, fliesCount, fliesLabel, p, k,
                 OpenChip(d.ChipPaddingFlyStart, d.ChipPaddingEnd, d.ChipIconOpenFly, d.ChipIconGapOpenFly),
                 contentColor, hasMedia, flown, pillsActive, onFlyClick,
-                // While the comments sheet rises, the Ci volo pill slips down and out.
-                extra = Modifier.graphicsLayer {
-                    val gone = rampOf(sheetProgress(), d.SheetFlyFade)
-                    alpha = 1f - gone
-                    translationY = d.SheetFlyDrop.toPx() * gone
-                },
             )
             Spacer(Modifier.width(d.MetaItemGap + (d.PillsGap - d.MetaItemGap) * p))
             MorphingChip(
