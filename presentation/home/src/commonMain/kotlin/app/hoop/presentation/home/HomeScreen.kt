@@ -382,6 +382,7 @@ private fun PostCard(
         sheetProgress = effects.sheetProgress,
         immersion = effects.immersion,
         immersionSign = effects.immersionSign,
+        onRepliesBounds = effects.onCommentsBounds,
     )
 }
 

@@ -33,7 +33,10 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.draw.clipToBounds
+import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.geometry.isSpecified
+import androidx.compose.ui.layout.boundsInRoot
+import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.layout.layout
 import androidx.compose.ui.unit.Constraints
 import kotlin.math.PI
@@ -101,7 +104,8 @@ object HoopPostCardDefaults {
     val StreetBelowTitle: Dp = 32.dp
     val PillHeight: Dp = 46.dp
     val PillIconSize: Dp = 24.dp
-    val PillsInset: Dp = 16.dp
+    /** Left margin of the open pills (the same as the title) and of the video bar. */
+    val PillsInset: Dp = 24.dp
     val PillsGap: Dp = 10.dp
     val VideoBarBottom: Dp = 124.dp
     val VideoBarHeight: Dp = 3.dp
@@ -132,13 +136,19 @@ object HoopPostCardDefaults {
     val ChipToneFade = 0.35f to 0.55f
     val ChipIconSwap = 0.4f to 0.6f
     val ChipLabel = 0.55f to 0.9f
-    val ChipLabelGapOpen: Dp = 6.dp
+    val ChipLabelGapOpen: Dp = 4.dp
+    val ChipIconOpenFly: Dp = 24.dp
+    val ChipIconOpenReplies: Dp = 20.dp
+    val ChipIconGapOpenFly: Dp = 9.dp
+    val ChipPaddingFlyStart: Dp = 14.dp
+    val ChipPaddingEnd: Dp = 18.dp
+    val ChipPaddingRepliesStart: Dp = 18.dp
     val ChipLabelMaxWidth: Dp = 90.dp
     val TopScrimFade = 0.2f to 0.7f
 
     // Comments sheet: how the pills react while it rises (ranges of the sheet progress).
     val SheetFlyFade = 0f to 0.3f
-    val SheetLabelFade = 0.1f to 0.4f
+    val SheetChipFade = 0f to 0.25f
     val SheetFlyDrop: Dp = 20.dp
     /** Landscape view: the post's elements fade out over this range of the immersion progress. */
     val ImmersionFade = 0f to 0.3f
@@ -181,6 +191,8 @@ fun HoopPostCard(
     immersion: () -> Float = { 0f },
     /** +1 or -1: the media turns against the phone's physical rotation so it stays upright for the viewer. */
     immersionSign: Float = 1f,
+    /** Reports the bounds (window coordinates) of the comments pill, so the sheet can grow out of it. */
+    onRepliesBounds: (Rect) -> Unit = {},
 ) {
     val colors = HoopTheme.colors
     val d = HoopPostCardDefaults
@@ -298,17 +310,19 @@ fun HoopPostCard(
         }
 
         // The two counters of the closed card ARE the pills of the open post: they widen, grow taller and gain a background.
-        val pillWidth = (cardWidth - d.PillsInset * 2 - d.PillsGap) / 2
         val pillsActive = p >= d.PILLS_ACTIVE_PROGRESS
         val chipBottom = d.MetaBottomClosed + (d.PillsBottom - d.MetaBottomClosed) * k + bottomInset * p
         Row(
             Modifier.align(Alignment.BottomStart).fillMaxWidth()
-                .padding(start = d.TitleInsetClosed, end = mix(d.TitleInsetClosed, d.PillsInset)).padding(bottom = chipBottom),
+                .padding(start = mix(d.TitleInsetClosed, d.PillsInset), end = d.TitleInsetClosed).padding(bottom = chipBottom),
             verticalAlignment = Alignment.Bottom,
         ) {
-            Spacer(Modifier.weight(1f))
+            // Closed, the counters sit at the right end; open, the pills sit at the left, like the title.
+            Spacer(Modifier.weight((1f - p).coerceAtLeast(MIN_SPACER_WEIGHT)))
             MorphingChip(
-                HoopIcons.Fly, HoopIcons.Fly, fliesCount, fliesLabel, p, k, pillWidth, contentColor, hasMedia, flown, pillsActive, onFlyClick,
+                HoopIcons.Fly, HoopIcons.Fly, fliesCount, fliesLabel, p, k,
+                OpenChip(d.ChipPaddingFlyStart, d.ChipPaddingEnd, d.ChipIconOpenFly, d.ChipIconGapOpenFly),
+                contentColor, hasMedia, flown, pillsActive, onFlyClick,
                 // While the comments sheet rises, the Ci volo pill slips down and out.
                 extra = Modifier.graphicsLayer {
                     val gone = rampOf(sheetProgress(), d.SheetFlyFade)
@@ -318,23 +332,34 @@ fun HoopPostCard(
             )
             Spacer(Modifier.width(d.MetaItemGap + (d.PillsGap - d.MetaItemGap) * p))
             MorphingChip(
-                HoopIcons.Chat, HoopIcons.ArrowUp, repliesCount, repliesLabel, p, k, pillWidth, contentColor, hasMedia, false, pillsActive, onRepliesClick,
-                labelFade = { 1f - rampOf(sheetProgress(), d.SheetLabelFade) },
+                HoopIcons.Chat, HoopIcons.Chat, repliesCount, repliesLabel, p, k,
+                OpenChip(d.ChipPaddingRepliesStart, d.ChipPaddingEnd, d.ChipIconOpenReplies, d.ChipIconGapOpen),
+                contentColor, hasMedia, false, pillsActive, onRepliesClick,
+                // The pill becomes the sheet: its content fades as the sheet grows out of the same rectangle.
+                extra = Modifier.graphicsLayer { alpha = 1f - rampOf(sheetProgress(), d.SheetChipFade) },
+                onBounds = onRepliesBounds,
             )
+            Spacer(Modifier.weight(p.coerceAtLeast(MIN_SPACER_WEIGHT)))
         }
         }
     }
 }
 
+private const val MIN_SPACER_WEIGHT = 0.0001f
+
+/** Shape of a chip once it is a pill of the open post: padding before and after, icon size and gap between icon and number. */
+private class OpenChip(val paddingStart: Dp, val paddingEnd: Dp, val icon: Dp, val iconGap: Dp)
+
 /**
  * A counter of the closed card that becomes a pill of the open post. [p] drives opacities and width, [k] (the same value, allowed
- * to overshoot slightly) drives height, font and icon. The closed width is measured from the content; the open one is [pillWidth].
+ * to overshoot slightly) drives height, font and icon. Both the closed and the open width are measured from the content, so the
+ * pill is as wide as its text, as in the design.
  */
 @Composable
 private fun MorphingChip(
-    closedIcon: ImageVector, openIcon: ImageVector, count: String, label: String, p: Float, k: Float, pillWidth: Dp,
+    closedIcon: ImageVector, openIcon: ImageVector, count: String, label: String, p: Float, k: Float, open: OpenChip,
     closedColor: Color, onMedia: Boolean, active: Boolean, enabled: Boolean, onClick: () -> Unit,
-    extra: Modifier = Modifier, labelFade: () -> Float = { 1f },
+    extra: Modifier = Modifier, labelFade: () -> Float = { 1f }, onBounds: (Rect) -> Unit = {},
 ) {
     val colors = HoopTheme.colors
     val d = HoopPostCardDefaults
@@ -345,9 +370,15 @@ private fun MorphingChip(
         val textPx = measurer.measure(count, baseStyle).size.width
         d.ChipIconClosed + d.ChipIconGapClosed + with(density) { textPx.toDp() } + d.ChipClosedPadding * 2
     }
+    val openStyle = baseStyle.copy(fontSize = d.ChipFontOpen, fontWeight = FontWeight.SemiBold)
+    val openWidth = remember(count, label, openStyle, density, open) {
+        val countPx = measurer.measure(count, openStyle).size.width
+        val labelPx = measurer.measure(label, openStyle).size.width
+        open.paddingStart + open.icon + open.iconGap + with(density) { (countPx + labelPx).toDp() } + d.ChipLabelGapOpen + open.paddingEnd
+    }
     fun mix(a: Dp, b: Dp) = a + (b - a) * k
     val height = mix(d.ChipHeightClosed, d.PillHeight)
-    val width = closedWidth + (pillWidth - closedWidth) * p
+    val width = closedWidth + (openWidth - closedWidth) * p
     val background = rampOf(p, d.ChipBackground)
     val container = if (active) colors.accent.copy(alpha = background) else colors.surface.copy(alpha = d.PILL_OFF_ALPHA * background)
     // On media the closed content is white and turns dark with the white pill; questions are always dark.
@@ -356,10 +387,11 @@ private fun MorphingChip(
     val bold = k > d.ChipBoldFrom
     val labelProgress = rampOf(p, d.ChipLabel)
     val swap = rampOf(p, d.ChipIconSwap)
-    val iconSize = mix(d.ChipIconClosed, d.PillIconSize)
+    val iconSize = mix(d.ChipIconClosed, open.icon)
     Row(
-        extra.width(width).height(height).clip(RoundedCornerShape(height / 2)).background(container)
-            .clickable(enabled = enabled, onClick = onClick),
+        extra.width(width).height(height).onGloballyPositioned { onBounds(it.boundsInRoot()) }.clip(RoundedCornerShape(height / 2)).background(container)
+            .clickable(enabled = enabled, onClick = onClick)
+            .padding(start = open.paddingStart * p, end = open.paddingEnd * p),
         horizontalArrangement = Arrangement.Center,
         verticalAlignment = Alignment.CenterVertically,
     ) {
@@ -369,14 +401,14 @@ private fun MorphingChip(
         }
         Text(
             count,
-            Modifier.padding(start = mix(d.ChipIconGapClosed, d.ChipIconGapOpen)),
-            style = baseStyle.copy(fontSize = (d.ChipFontClosed.value + (d.ChipFontOpen.value - d.ChipFontClosed.value) * k).sp, fontWeight = if (bold) FontWeight.Bold else FontWeight.Medium),
+            Modifier.padding(start = mix(d.ChipIconGapClosed, open.iconGap)),
+            style = baseStyle.copy(fontSize = (d.ChipFontClosed.value + (d.ChipFontOpen.value - d.ChipFontClosed.value) * k).sp, fontWeight = if (bold) FontWeight.SemiBold else FontWeight.Medium),
             color = content, maxLines = 1, softWrap = false,
         )
         Text(
             label,
             Modifier.padding(start = d.ChipLabelGapOpen * labelProgress).widthIn(max = d.ChipLabelMaxWidth * labelProgress).graphicsLayer { alpha = labelProgress * labelFade() },
-            style = baseStyle.copy(fontSize = (d.ChipFontClosed.value + (d.ChipFontOpen.value - d.ChipFontClosed.value) * k).sp, fontWeight = if (bold) FontWeight.Bold else FontWeight.Medium),
+            style = baseStyle.copy(fontSize = (d.ChipFontClosed.value + (d.ChipFontOpen.value - d.ChipFontClosed.value) * k).sp, fontWeight = if (bold) FontWeight.SemiBold else FontWeight.Medium),
             color = content, maxLines = 1, softWrap = false, overflow = TextOverflow.Clip,
         )
     }

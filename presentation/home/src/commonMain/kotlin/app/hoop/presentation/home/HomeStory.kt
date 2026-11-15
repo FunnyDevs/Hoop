@@ -231,6 +231,7 @@ internal fun PostStory(
                             onComments = { if (q >= StorySpec.OPEN) comments.show(post) },
                             immersion = if (isShown) ({ immersion.value }) else ({ 0f }),
                             immersionSign = immersionSign,
+                            onCommentsBounds = { if (isShown) comments.pillBounds = it },
                         )
                         cardContent(post, q, effects)
                     }
@@ -258,7 +259,6 @@ internal fun PostStory(
                 CommentsSheet(
                     post = sheetPost, state = comments,
                     replyText = replyText, onReplyTextChange = onReplyTextChange, onSend = onSend,
-                    bottomInset = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding(),
                 )
             }
         }
@@ -271,6 +271,7 @@ internal class PostCardEffects(
     val onComments: () -> Unit,
     val immersion: () -> Float = { 0f },
     val immersionSign: Float = 1f,
+    val onCommentsBounds: (androidx.compose.ui.geometry.Rect) -> Unit = {},
 ) {
     companion object {
         val None = PostCardEffects(sheetProgress = { 0f }, onComments = {})

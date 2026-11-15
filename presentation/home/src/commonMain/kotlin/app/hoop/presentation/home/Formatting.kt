@@ -64,9 +64,7 @@ internal fun repliesLabel(post: FeedPost): String =
     else post.replies.size.toString()
 
 @Composable
-internal fun repliesHeading(post: FeedPost): String = pluralStringResource(
-    if (post.type == PostType.Question) Res.plurals.replies_count else Res.plurals.comments_count, post.replies.size, post.replies.size,
-)
+internal fun repliesHeading(post: FeedPost): String = pluralStringResource(Res.plurals.comments_count, post.replies.size, post.replies.size)
 
 internal fun initialsOf(name: String): String = name.take(2).uppercase()
 
@@ -88,8 +86,6 @@ internal fun questionColorOf(post: FeedPost): androidx.compose.ui.graphics.Color
     return cards[kotlin.math.abs(post.id.value.hashCode()) % cards.size]
 }
 
-/** Label of the replies pill: replies to a question, comments on a photo or video. */
+/** Label of the comments pill: the design calls replies to a question "comments" too. */
 @Composable
-internal fun repliesPillLabel(post: FeedPost): String = pluralStringResource(
-    if (post.type == PostType.Question) Res.plurals.replies_label else Res.plurals.comments_label, post.replies.size,
-)
+internal fun repliesPillLabel(post: FeedPost): String = pluralStringResource(Res.plurals.comments_label, post.replies.size)

@@ -29,6 +29,15 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
+import androidx.compose.ui.geometry.CornerRadius
+import androidx.compose.ui.geometry.Rect
+import androidx.compose.ui.geometry.RoundRect
+import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.graphics.Outline
+import androidx.compose.ui.graphics.Shape
+import androidx.compose.ui.unit.Density
+import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -75,14 +84,15 @@ private object CommentsSpec {
     const val DRAG_RANGE = 0.265f
     /** Position below which releasing the finger closes the sheet. */
     const val CLOSE_BELOW = -0.25f
+    /** The sheet counts as raised above this position; pulled below [UP_RELEASE] from there it closes. */
+    const val UP_THRESHOLD = 0.5f
+    const val UP_RELEASE = 0.85f
     const val FLING_UP = 1500f
     const val FLING_CLOSE = 2500f
 
-    // Where the sheet starts: the right-hand pill of the open post.
-    val pillBottom = 64.dp
-    val pillHeight = 46.dp
-    val pillInset = 16.dp
-    val pillGap = 10.dp
+    // Where the sheet starts if the pill's bounds are not known yet.
+    val fallbackPillBottom = 64.dp
+    val fallbackPillHeight = 46.dp
 
     val background = 0f to 0.35f
     val content = 0.4f to 0.85f
@@ -115,9 +125,15 @@ private object CommentsSpec {
 internal class CommentsState(private val scope: CoroutineScope) {
     val open = Animatable(0f)
     val position = Animatable(0f)
+    /** Bounds of the "comments" pill of the open post (window coordinates), where the sheet starts; updated by the card. */
+    var pillBounds: Rect = Rect.Zero
+
     var postId: String? by mutableStateOf(null)
         private set
     val isShown: Boolean get() = postId != null
+
+    /** True when the current drag started with the sheet fully raised: pulling it down from there closes it, with no stop in the middle. */
+    var dragStartedUp: Boolean = false
 
     /** Height of the area the sheet is laid out in, written by the layout and used to turn drags into positions. */
     var heightPx: Float = 0f
@@ -174,46 +190,57 @@ internal fun CommentsSheet(
     replyText: String,
     onReplyTextChange: (String) -> Unit,
     onSend: () -> Unit,
-    bottomInset: Dp,
     modifier: Modifier = Modifier,
 ) {
     val colors = HoopTheme.colors
     val isQuestion = post.type == PostType.Question
+    val shape = remember(state, isQuestion) { SheetShape(state, isQuestion) }
     Box(
         modifier
             .layout { measurable, constraints ->
-                val width = constraints.maxWidth.toFloat()
+                // The content is laid out once at its final size; it only moves when the sheet is dragged between its heights.
                 val height = constraints.maxHeight.toFloat()
-                val s = state.open.value.coerceAtLeast(0f)
-                val inset = CommentsSpec.pillInset.toPx()
-                val pillWidth = (width - inset * 2 - CommentsSpec.pillGap.toPx()) / 2f
-                val pillLeft = inset + pillWidth + CommentsSpec.pillGap.toPx()
                 state.heightPx = height
-                val pillBottomEdge = height - (CommentsSpec.pillBottom.toPx() + bottomInset.toPx())
-                val finalTop = sheetTop(state.position.value, height, isQuestion)
-                // The spring may overshoot a little: only the height uses it, the sides and bottom stay on the screen.
-                val edge = s.coerceIn(0f, 1f)
-                val left = pillLeft * (1f - edge)
-                val right = width - inset * (1f - edge)
-                val bottom = height - (CommentsSpec.pillBottom.toPx() + bottomInset.toPx()) * (1f - edge)
-                val pillTop = pillBottomEdge - CommentsSpec.pillHeight.toPx()
-                val top = pillTop + (finalTop - pillTop) * s
-                val w = max(right - left, 0f).roundToInt()
-                val h = max(bottom - top, 0f).roundToInt()
-                val placeable = measurable.measure(Constraints.fixed(w, h))
-                layout(constraints.maxWidth, constraints.maxHeight) { placeable.place(left.roundToInt(), top.roundToInt()) }
+                val top = sheetTop(state.position.value, height, isQuestion).roundToInt()
+                val placeable = measurable.measure(Constraints.fixed(constraints.maxWidth, (constraints.maxHeight - top).coerceAtLeast(0)))
+                layout(constraints.maxWidth, constraints.maxHeight) { placeable.place(0, top) }
             }
             .graphicsLayer {
-                val s = state.open.value.coerceAtLeast(0f)
-                val topRadius = (CommentsSpec.topRadiusClosed + (CommentsSpec.topRadiusOpen - CommentsSpec.topRadiusClosed) * s.coerceIn(0f, 1f)).toPx()
-                val bottomRadius = (CommentsSpec.bottomRadiusClosed * (1f - s.coerceIn(0f, 1f))).toPx()
-                shape = RoundedCornerShape(topRadius, topRadius, bottomRadius, bottomRadius)
+                // The morph from the pill to the sheet happens here, in the draw phase: no composition, no layout.
+                this.shape = shape
                 clip = true
-                shadowElevation = CommentsSpec.shadowElevation.toPx() * rampOf(s, CommentsSpec.shadow)
+                shadowElevation = CommentsSpec.shadowElevation.toPx() * rampOf(state.open.value, CommentsSpec.shadow)
             }
             .drawBehind { drawRect(colors.surface.copy(alpha = 0.7f + 0.3f * rampOf(state.open.value, CommentsSpec.background))) },
     ) {
         SheetContent(post, state, isQuestion, replyText, onReplyTextChange, onSend)
+    }
+}
+
+/**
+ * Outline of the sheet while it opens: it starts as the "comments" pill (its real bounds, measured on the open post) and grows
+ * to the sheet's rectangle. Read in the layer, so the animation costs no layout. Coordinates are relative to the sheet's top.
+ */
+private class SheetShape(private val state: CommentsState, private val isQuestion: Boolean) : Shape {
+    override fun createOutline(size: Size, layoutDirection: LayoutDirection, density: Density): Outline {
+        // The spring may overshoot a little: only the top uses it, the sides and bottom stay on the screen.
+        val s = state.open.value.coerceAtLeast(0f)
+        val edge = s.coerceIn(0f, 1f)
+        val width = size.width
+        val height = state.heightPx
+        val finalTop = sheetTop(state.position.value, height, isQuestion)
+        val pill = state.pillBounds.takeIf { it.width > 0f } ?: with(density) {
+            Rect(width / 2f, height - CommentsSpec.fallbackPillBottom.toPx() - CommentsSpec.fallbackPillHeight.toPx(), width - 16.dp.toPx(), height - CommentsSpec.fallbackPillBottom.toPx())
+        }
+        val left = pill.left * (1f - edge)
+        val right = width - (width - pill.right) * (1f - edge)
+        val top = pill.top + (finalTop - pill.top) * s - finalTop
+        val bottom = (height - finalTop) - (height - pill.bottom) * (1f - edge)
+        val topRadius = with(density) { (CommentsSpec.topRadiusClosed + (CommentsSpec.topRadiusOpen - CommentsSpec.topRadiusClosed) * edge).toPx() }
+        val bottomRadius = with(density) { (CommentsSpec.bottomRadiusClosed * (1f - edge)).toPx() }
+        return Outline.Rounded(
+            RoundRect(left, top, right, bottom, CornerRadius(topRadius), CornerRadius(topRadius), CornerRadius(bottomRadius), CornerRadius(bottomRadius)),
+        )
     }
 }
 
@@ -240,6 +267,7 @@ private fun SheetContent(
             Modifier.fillMaxWidth().draggable(
                 rememberDraggableState { dy -> state.dragBy(dy, isQuestion) },
                 Orientation.Vertical,
+                onDragStarted = { state.dragStartedUp = state.position.value > CommentsSpec.UP_THRESHOLD },
                 onDragStopped = { velocity -> sheetRelease(state, velocity, isQuestion) },
             ),
         ) {
@@ -277,7 +305,7 @@ private fun SheetContent(
         ) {
             HoopInputBar(
                 value = replyText, onValueChange = onReplyTextChange,
-                placeholder = stringResource(if (isQuestion) Res.string.reply_placeholder else Res.string.comment_placeholder),
+                placeholder = stringResource(Res.string.comment_placeholder),
                 sendLabel = stringResource(Res.string.reply_send), onSend = onSend,
             )
         }
@@ -287,6 +315,8 @@ private fun SheetContent(
 private fun sheetRelease(state: CommentsState, velocity: Float, isQuestion: Boolean) {
     val position = state.position.value
     when {
+        // Raised to the top and pulled down: close right away instead of resting at the middle height.
+        state.dragStartedUp && (position < CommentsSpec.UP_RELEASE || velocity > CommentsSpec.FLING_CLOSE) -> state.hide()
         position < CommentsSpec.CLOSE_BELOW || velocity > CommentsSpec.FLING_CLOSE && position <= 0.05f -> state.hide()
         !isQuestion && (position > 0.5f || velocity < -CommentsSpec.FLING_UP) -> state.moveTo(1f)
         else -> state.moveTo(0f)
