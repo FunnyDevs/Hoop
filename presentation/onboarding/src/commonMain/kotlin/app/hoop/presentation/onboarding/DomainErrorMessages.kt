@@ -29,6 +29,7 @@ fun Violation.messageRes(): StringResource = when (this) {
     Violation.PostTextBlank -> Res.string.violation_post_text_blank
     Violation.PostTextTooLong -> Res.string.violation_post_text_too_long
     Violation.PostMediaMissing -> Res.string.violation_post_media_missing
+    Violation.PostMediaNotLive -> Res.string.violation_post_media_not_live
     Violation.PostTypeNotAllowedInHoop -> Res.string.violation_post_type_not_allowed
     Violation.TooManyHoops -> Res.string.violation_too_many_hoops
     Violation.HomeHoopCannotBeRemoved -> Res.string.violation_home_cannot_be_removed

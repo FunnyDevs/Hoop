@@ -69,6 +69,8 @@ import app.hoop.designsystem.theme.HoopTheme
 import app.hoop.domain.identity.AppNotification
 import app.hoop.domain.identity.NotificationKind
 import app.hoop.domain.post.FeedPost
+import androidx.compose.ui.platform.LocalFocusManager
+import app.hoop.presentation.home.camera.CaptureOverlay
 import app.hoop.presentation.home.resources.*
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.first
@@ -314,8 +316,10 @@ fun HomeScreen(state: HomeUiState, config: HomeConfig, onIntent: (HomeIntent) ->
         // The keyboard going away folds the composer back into the ask bar.
         val imeVisible = WindowInsets.ime.getBottom(LocalDensity.current) > 0
         var imeSeen by remember(state.composer != null) { mutableStateOf(false) }
-        LaunchedEffect(state.composer != null, imeVisible) {
-            if (state.composer == null) return@LaunchedEffect
+        // A photo or video caption is never thrown away that way: the shot would be lost.
+        val foldable = state.composer != null && state.composer.media == null
+        LaunchedEffect(foldable, imeVisible) {
+            if (!foldable) return@LaunchedEffect
             if (imeVisible) imeSeen = true else if (imeSeen) onIntent(HomeIntent.ComposerCollapsed)
         }
 
@@ -347,6 +351,13 @@ fun HomeScreen(state: HomeUiState, config: HomeConfig, onIntent: (HomeIntent) ->
             HoopToast(stringResource(Res.string.toast_published, name))
         }
         LaunchedEffect(toast) { if (toast != null) { delay(HomeSpec.TOAST_MILLIS); onIntent(HomeIntent.ToastShown) } }
+
+        // ---- Live camera and confirmation of the shot: above everything ----
+        state.capture?.let { capture ->
+            val focus = LocalFocusManager.current
+            LaunchedEffect(Unit) { focus.clearFocus() }
+            CaptureOverlay(capture, onIntent)
+        }
     }
 }
 

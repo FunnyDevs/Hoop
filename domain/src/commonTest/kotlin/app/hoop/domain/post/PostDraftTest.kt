@@ -9,7 +9,7 @@ import app.hoop.domain.hoop.testHome
 import kotlin.test.Test
 
 class PostDraftTest {
-    private val media = MediaRef("file://x", "image/jpeg")
+    private val media = MediaRef("file://x", "image/jpeg", capturedAtEpochMillis = 1_700_000_000_000L)
 
     @Test fun homeAcceptsEveryType() {
         PostDraft.create(testHome(), PostType.Question, "Chi apre?").assertSuccess()
@@ -25,6 +25,8 @@ class PostDraftTest {
 
     @Test fun questionNeedsText() = PostDraft.create(testHome(), PostType.Question, "  ").assertViolation(Violation.PostTextBlank)
     @Test fun photoNeedsMedia() = PostDraft.create(testHome(), PostType.Photo, "x").assertViolation(Violation.PostMediaMissing)
+    @Test fun mediaFromTheGalleryIsRefused() =
+        PostDraft.create(testHome(), PostType.Photo, "", MediaRef("file://x", "image/jpeg")).assertViolation(Violation.PostMediaNotLive)
     @Test fun textIsLimited() =
         PostDraft.create(testHome(), PostType.Question, "a".repeat(PostPolicy.TEXT_MAX_LENGTH + 1)).assertViolation(Violation.PostTextTooLong)
 }

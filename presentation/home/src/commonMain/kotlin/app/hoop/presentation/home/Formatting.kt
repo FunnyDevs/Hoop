@@ -1,7 +1,10 @@
 package app.hoop.presentation.home
 
 import androidx.compose.runtime.Composable
+import androidx.compose.ui.graphics.painter.BitmapPainter
 import androidx.compose.ui.graphics.painter.Painter
+import app.hoop.presentation.home.camera.isLocalMedia
+import app.hoop.presentation.home.camera.rememberMediaBitmap
 import app.hoop.designsystem.component.HoopPostKind
 import app.hoop.domain.post.FeedPost
 import app.hoop.domain.post.PostType
@@ -42,11 +45,15 @@ internal fun PostType.toKind(): HoopPostKind = when (this) {
 }
 
 @Composable
-internal fun mediaPainter(key: String?): Painter? = when (key) {
-    SampleMedia.SUNSET -> painterResource(Res.drawable.sample_sunset)
-    SampleMedia.CONCERT -> painterResource(Res.drawable.sample_concert)
-    SampleMedia.MARKET -> painterResource(Res.drawable.sample_market)
-    else -> null
+internal fun mediaPainter(key: String?): Painter? {
+    // A shot taken with the camera is a local file (a video shows its first frame); the rest are the sample photos.
+    val local = rememberMediaBitmap(key.takeIf { isLocalMedia(it) })
+    return when (key) {
+        SampleMedia.SUNSET -> painterResource(Res.drawable.sample_sunset)
+        SampleMedia.CONCERT -> painterResource(Res.drawable.sample_concert)
+        SampleMedia.MARKET -> painterResource(Res.drawable.sample_market)
+        else -> local?.let { BitmapPainter(it) }
+    }
 }
 
 @Composable

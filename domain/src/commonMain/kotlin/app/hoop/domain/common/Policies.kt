@@ -21,6 +21,9 @@ object HoopPolicy {
 
 object PostPolicy {
     const val TEXT_MAX_LENGTH = 500
+    const val VIDEO_MAX_MILLIS = 15_000L
+    /** A press shorter than this is a tap: it takes a photo instead of a video. */
+    const val VIDEO_MIN_MILLIS = 500L
 }
 
 object GeoLimits {

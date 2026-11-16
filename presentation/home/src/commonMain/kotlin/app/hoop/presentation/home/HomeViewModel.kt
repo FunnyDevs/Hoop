@@ -9,8 +9,8 @@ import app.hoop.domain.geo.GeoPoint
 import app.hoop.domain.hoop.Hoop
 import app.hoop.domain.hoop.UserHoops
 import app.hoop.domain.post.FeedPost
-import app.hoop.domain.post.MediaRef
 import app.hoop.domain.post.PostType
+import app.hoop.presentation.home.camera.isVideo
 import app.hoop.domain.usecase.AddReplyUseCase
 import app.hoop.domain.usecase.GetHoopFeedUseCase
 import app.hoop.domain.usecase.GetNotificationsUseCase
@@ -37,6 +37,8 @@ class HomeViewModel(
 
     private var hoops: UserHoops? = null
     private var feeds: Map<String, List<FeedPost>> = emptyMap()
+    /** Where the device was when the position was last read; `null` if it was never known. */
+    private var knownLocation: GeoPoint? = null
 
     init {
         viewModelScope.launch { bootstrap() }
@@ -59,9 +61,13 @@ class HomeViewModel(
             HomeIntent.AskBarToggled -> _state.update { it.copy(askBarOpen = !it.askBarOpen, notificationsOpen = false) }
             HomeIntent.AskBarDismissed -> _state.update { it.copy(askBarOpen = false) }
             is HomeIntent.ComposerOpened -> _state.update { it.copy(composer = ComposerUi(intent.type), askBarOpen = false) }
-            is HomeIntent.ComposerTypeChanged -> _state.update { s -> s.copy(composer = s.composer?.let { ComposerUi(intent.type, it.text, it.mediaIndex, it.showError) }) }
-            is HomeIntent.ComposerTextChanged -> _state.update { s -> s.copy(composer = s.composer?.let { ComposerUi(it.type, intent.value, it.mediaIndex, false) }) }
-            is HomeIntent.ComposerMediaPicked -> _state.update { s -> s.copy(composer = s.composer?.let { ComposerUi(it.type, it.text, intent.index, it.showError) }) }
+            is HomeIntent.ComposerTextChanged -> _state.update { s -> s.copy(composer = s.composer?.let { ComposerUi(it.type, intent.value, it.media, false) }) }
+            HomeIntent.CameraRequested -> _state.update { it.copy(capture = CaptureUi()) }
+            HomeIntent.CameraClosed -> _state.update { it.copy(capture = null) }
+            // The position is the last one the device gave us; it is never asked for here.
+            is HomeIntent.MediaCaptured -> _state.update { it.copy(capture = CaptureUi(intent.media.copy(location = knownLocation))) }
+            HomeIntent.CaptureDiscarded -> _state.update { it.copy(capture = CaptureUi()) }
+            HomeIntent.CaptureConfirmed -> confirmCapture()
             HomeIntent.ComposerPublished -> publish()
             HomeIntent.ComposerDismissed -> _state.update { it.copy(composer = null) }
             HomeIntent.ComposerCollapsed -> _state.update { it.copy(composer = null, askBarOpen = true) }
@@ -72,7 +78,10 @@ class HomeViewModel(
     }
 
     private suspend fun bootstrap() {
-        requestLocation().getOrNull()?.let { point -> _state.update { it.copy(userLatitude = point.latitude, userLongitude = point.longitude) } }
+        requestLocation().getOrNull()?.let { point ->
+            knownLocation = point
+            _state.update { it.copy(userLatitude = point.latitude, userLongitude = point.longitude) }
+        }
         val aggregate = getUserHoops().getOrNull() ?: return _state.update { it.copy(isLoading = false) }
         hoops = aggregate
         feeds = aggregate.all.associate { hoop -> hoop.id.value to (getFeed(hoop, position()).getOrNull() ?: emptyList()) }
@@ -121,7 +130,7 @@ class HomeViewModel(
         val s = _state.value
         val composer = s.composer ?: return
         val hoop = hoops?.find(hoopId(s.activeHoopId)) ?: return
-        val media = if (composer.type == PostType.Question) null else MediaRef(SampleMedia.keyAt(composer.mediaIndex), SampleMedia.MIME_TYPE)
+        val media = if (composer.type == PostType.Question) null else composer.media
         viewModelScope.launch {
             when (val result = publishPost(hoop, composer.type, composer.text, media)) {
                 is DomainResult.Success -> {
@@ -130,9 +139,18 @@ class HomeViewModel(
                     publishState(selectedIndex = 0)
                 }
                 is DomainResult.Failure -> _state.update { st ->
-                    st.copy(composer = st.composer?.let { ComposerUi(it.type, it.text, it.mediaIndex, showError = true) })
+                    st.copy(composer = st.composer?.let { ComposerUi(it.type, it.text, it.media, showError = true) })
                 }
             }
+        }
+    }
+
+    /** Keeps the shot: the composer opens (or, after a retake, gets the new shot) with the caption already typed, if any. */
+    private fun confirmCapture() {
+        _state.update { s ->
+            val media = s.capture?.media ?: return@update s
+            val type = if (media.isVideo) PostType.Video else PostType.Photo
+            s.copy(composer = ComposerUi(type, s.composer?.text.orEmpty(), media), capture = null, askBarOpen = false)
         }
     }
 

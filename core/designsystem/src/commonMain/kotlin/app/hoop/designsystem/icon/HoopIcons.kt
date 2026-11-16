@@ -52,6 +52,18 @@ object HoopIcons {
     val Plus: ImageVector by lazy { line("Plus", 2.4f, "M12 5v14M5 12h14") }
     val Close: ImageVector by lazy { line("Close", 2.4f, "M6 6l12 12M18 6L6 18") }
     val ArrowUp: ImageVector by lazy { line("ArrowUp", STROKE, "M12 19V6M6 11l6-6 6 6") }
+    /** Lighter X and heavier tick of the confirmation of a shot. */
+    val CloseLight: ImageVector by lazy { line("CloseLight", STROKE, "M6 6l12 12M18 6L6 18") }
+    val CheckHeavy: ImageVector by lazy { line("CheckHeavy", 2.8f, "M5 12l5 5L20 7") }
+    val Flash: ImageVector by lazy { line("Flash", STROKE, "M13 3L5 14h6l-1 7 8-11h-6z") }
+    val FlashOff: ImageVector by lazy { line("FlashOff", STROKE, "M13 3L5 14h6l-1 7 8-11h-6z", "M4 4l16 16") }
+    val FlipCamera: ImageVector by lazy {
+        line("FlipCamera", STROKE, "M4 8V5h3M20 8V5h-3M4 16v3h3M20 16v3h-3", "M12 8.8a3.2 3.2 0 1 0 0 6.4 3.2 3.2 0 0 0 0-6.4z")
+    }
+    val Clock: ImageVector by lazy { line("Clock", STROKE, "M12 3a9 9 0 1 0 0 18 9 9 0 0 0 0-18z", "M12 7v5l3 2") }
+    val Volume: ImageVector by lazy { line("Volume", STROKE, "M4 9v6h4l5 4V5L8 9z", "M16 9a4 4 0 0 1 0 6") }
+    val VolumeOff: ImageVector by lazy { line("VolumeOff", STROKE, "M4 9v6h4l5 4V5L8 9z", "M17 9l4 6M21 9l-4 6") }
+    val Retake: ImageVector by lazy { line("Retake", STROKE, "M9 7L4 12l5 5", "M4 12h11a5 5 0 0 1 0 10h-3") }
 
     /** "Ci volo": a swallow banking into a turn (filled, with a thin stroke of the same color), rotated by [FLY_TILT] around the center. */
     val Fly: ImageVector by lazy {

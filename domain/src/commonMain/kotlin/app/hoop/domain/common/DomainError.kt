@@ -27,6 +27,8 @@ enum class Violation {
     PostTextBlank,
     PostTextTooLong,
     PostMediaMissing,
+    /** The photo or video was not captured live by the in-app camera. */
+    PostMediaNotLive,
     PostTypeNotAllowedInHoop,
     TooManyHoops,
     HomeHoopCannotBeRemoved,

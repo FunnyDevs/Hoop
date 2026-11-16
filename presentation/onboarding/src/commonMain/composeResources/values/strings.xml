@@ -118,7 +118,8 @@
     <string name="violation_radius_out_of_range">Il raggio non è consentito.</string>
     <string name="violation_post_text_blank">Scrivi qualcosa.</string>
     <string name="violation_post_text_too_long">Il testo è troppo lungo.</string>
-    <string name="violation_post_media_missing">Scegli una foto o un video.</string>
+    <string name="violation_post_media_missing">Scatta una foto o gira un video.</string>
+    <string name="violation_post_media_not_live">Foto e video si fanno solo dal vivo con la camera di Hoop.</string>
     <string name="violation_post_type_not_allowed">In questo Hoop si possono pubblicare solo domande.</string>
     <string name="violation_too_many_hoops">Hai raggiunto il numero massimo di Hoop.</string>
     <string name="violation_home_cannot_be_removed">L'Hoop iniziale non si può eliminare.</string>

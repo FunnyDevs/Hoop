@@ -58,6 +58,9 @@ import app.hoop.designsystem.component.HoopTagChip
 import app.hoop.designsystem.icon.HoopIcons
 import app.hoop.designsystem.theme.HoopTheme
 import app.hoop.domain.post.PostType
+import androidx.compose.foundation.layout.offset
+import app.hoop.presentation.home.camera.isVideo
+import app.hoop.presentation.home.camera.rememberMediaBitmap
 import app.hoop.presentation.home.resources.*
 import org.jetbrains.compose.resources.stringResource
 
@@ -70,10 +73,16 @@ private object ComposeSpec {
     val sendButton = 48.dp
     val sheetHeight = 244.dp
     val sheetCorner = 30.dp
-    val sheetTypeButton = 38.dp
     val sheetSend = 52.dp
     val avatar = 34.dp
-    val thumb = 44.dp
+    val thumb = 72.dp
+    val thumbCorner = 18.dp
+    val thumbBorder = 3.dp
+    val thumbBottom = 18.dp
+    val thumbPlay = 24.dp
+    val retake = 26.dp
+    val retakeIcon = 13.dp
+    val retakeOverhang = 8.dp
     const val MORPH_DAMPING = 0.85f
     const val MORPH_ICON_FADE = 2.5f
     const val MORPH_ICON_DEGREES = 90f
@@ -157,7 +166,7 @@ internal fun ComposeMorph(
                 (1f - sheet * ComposeSpec.MORPH_BAR_FADE).coerceIn(0f, 1f)
             if (barAlpha > 0f) {
                 Box(Modifier.align(Alignment.TopEnd).requiredWidth(barWidth).height(ComposeSpec.barHeight).alpha(barAlpha)) {
-                    AskBarContent(hoop?.name, hoop?.isHome == true, onOpen)
+                    AskBarContent(hoop?.name, hoop?.isHome == true, onOpen) { onIntent(HomeIntent.CameraRequested) }
                 }
             }
             val sheetAlpha = ((sheet - ComposeSpec.MORPH_SHEET_START) / (1f - ComposeSpec.MORPH_SHEET_START)).coerceIn(0f, 1f)
@@ -172,7 +181,7 @@ internal fun ComposeMorph(
 }
 
 @Composable
-private fun AskBarContent(hoopName: String?, isHome: Boolean, onOpen: (PostType) -> Unit) {
+private fun AskBarContent(hoopName: String?, isHome: Boolean, onOpen: (PostType) -> Unit, onCamera: () -> Unit) {
     val colors = HoopTheme.colors
     Row(
         Modifier.fillMaxSize().padding(start = 22.dp, end = HoopTheme.spacing.xs),
@@ -184,12 +193,10 @@ private fun AskBarContent(hoopName: String?, isHome: Boolean, onOpen: (PostType)
             Modifier.weight(1f), maxLines = 1, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
             style = HoopTheme.typography.bodyLarge.copy(fontWeight = androidx.compose.ui.text.font.FontWeight.Medium), color = colors.onSurfaceVariant,
         )
+        // One camera button, only in Home: photos and videos are taken live there (a tap for a photo, hold for a video).
         if (isHome) {
-            RoundAction(colors.tagPhoto, ComposeSpec.typeButton, stringResource(Res.string.action_photo), { onOpen(PostType.Photo) }) {
+            RoundAction(colors.tagPhoto, ComposeSpec.typeButton, stringResource(Res.string.action_camera), onCamera) {
                 Icon(HoopIcons.Camera, null, tint = colors.onTagPhoto, modifier = Modifier.size(HoopTheme.sizes.iconSmall))
-            }
-            RoundAction(colors.tagVideo, ComposeSpec.typeButton, stringResource(Res.string.action_video), { onOpen(PostType.Video) }) {
-                HoopPlayGlyph(colors.onTagVideo, Modifier.size(HoopTheme.sizes.playGlyph + 2.dp))
             }
         }
         RoundAction(colors.accent, ComposeSpec.sendButton, stringResource(Res.string.action_send), { onOpen(PostType.Question) }) {
@@ -219,6 +226,7 @@ internal fun ComposerContent(composer: ComposerUi, hoop: HoopUi?, onIntent: (Hom
     LaunchedEffect(Unit) { focus.requestFocus() }
     val hoopName = hoop?.name ?: stringResource(Res.string.hoop_home_name)
     val kind = composer.type.toKind()
+    val retakeLabel = stringResource(Res.string.composer_retake)
     run {
         Box(modifier.fillMaxSize().padding(start = spacing.lg - 2.dp, end = spacing.lg - 2.dp, top = spacing.lg - 4.dp)) {
             Column {
@@ -228,19 +236,6 @@ internal fun ComposerContent(composer: ComposerUi, hoop: HoopUi?, onIntent: (Hom
                     }
                     Text(stringResource(Res.string.composer_in, hoopName), style = HoopTheme.typography.labelMedium.copy(fontSize = HoopTheme.typography.bodyMedium.fontSize, fontWeight = androidx.compose.ui.text.font.FontWeight.SemiBold), color = colors.onSurface)
                     HoopTagChip(kind, tagLabel(composer.type))
-                    Row(Modifier.weight(1f), horizontalArrangement = Arrangement.spacedBy(spacing.sm, Alignment.End)) {
-                        if (hoop?.isHome == true) {
-                            if (composer.type != PostType.Photo) RoundAction(colors.tagPhoto, ComposeSpec.sheetTypeButton, stringResource(Res.string.action_photo), { onIntent(HomeIntent.ComposerTypeChanged(PostType.Photo)) }) {
-                                Icon(HoopIcons.Camera, null, tint = colors.onTagPhoto, modifier = Modifier.size(HoopTheme.sizes.iconSmall - 2.dp))
-                            }
-                            if (composer.type != PostType.Video) RoundAction(colors.tagVideo, ComposeSpec.sheetTypeButton, stringResource(Res.string.action_video), { onIntent(HomeIntent.ComposerTypeChanged(PostType.Video)) }) {
-                                HoopPlayGlyph(colors.onTagVideo, Modifier.size(HoopTheme.sizes.playGlyph))
-                            }
-                            if (composer.type != PostType.Question) RoundAction(colors.tagQuestion, ComposeSpec.sheetTypeButton, stringResource(Res.string.menu_question), { onIntent(HomeIntent.ComposerTypeChanged(PostType.Question)) }) {
-                                Text(stringResource(Res.string.glyph_question), style = HoopTheme.typography.titleMedium, color = colors.onTagQuestion)
-                            }
-                        }
-                    }
                 }
                 Spacer(Modifier.height(spacing.md + 2.dp))
                 BasicTextField(
@@ -263,17 +258,23 @@ internal fun ComposerContent(composer: ComposerUi, hoop: HoopUi?, onIntent: (Hom
                     },
                 )
             }
-            if (composer.type != PostType.Question) {
-                Row(Modifier.align(Alignment.BottomStart).padding(bottom = spacing.md - 2.dp), horizontalArrangement = Arrangement.spacedBy(spacing.sm)) {
-                    SampleMedia.pickerKeys.forEachIndexed { index, key ->
-                        val shape = RoundedCornerShape(12.dp)
-                        Box(
-                            Modifier.size(ComposeSpec.thumb).clip(shape)
-                                .border(3.dp, if (index == composer.mediaIndex) colors.accent else Color.Transparent, shape)
-                                .clickable { onIntent(HomeIntent.ComposerMediaPicked(index)) },
-                        ) {
-                            mediaPainter(key)?.let { Image(it, stringResource(Res.string.composer_media_option, index + 1), Modifier.fillMaxSize(), contentScale = ContentScale.Crop) }
+            // The one shot taken live, with a small button to take it again (it reopens the camera).
+            composer.media?.let { media ->
+                val shape = RoundedCornerShape(ComposeSpec.thumbCorner)
+                Box(Modifier.align(Alignment.BottomStart).padding(bottom = ComposeSpec.thumbBottom).size(ComposeSpec.thumb)) {
+                    Box(Modifier.fillMaxSize().clip(shape).background(colors.neutralContainer).border(ComposeSpec.thumbBorder, colors.accent, shape)) {
+                        rememberMediaBitmap(media.uri)?.let {
+                            Image(it, stringResource(Res.string.composer_media_thumb), Modifier.fillMaxSize(), contentScale = ContentScale.Crop)
                         }
+                        if (media.isVideo) HoopPlayGlyph(colors.onScrim, Modifier.align(Alignment.Center).size(ComposeSpec.thumbPlay))
+                    }
+                    Box(
+                        Modifier.align(Alignment.TopEnd).offset(ComposeSpec.retakeOverhang, -ComposeSpec.retakeOverhang).size(ComposeSpec.retake)
+                            .background(colors.brand, HoopTheme.shapes.circle).border(2.dp, colors.surface, HoopTheme.shapes.circle).clip(HoopTheme.shapes.circle)
+                            .semantics { contentDescription = retakeLabel }.clickable(role = Role.Button) { onIntent(HomeIntent.CameraRequested) },
+                        contentAlignment = Alignment.Center,
+                    ) {
+                        Icon(HoopIcons.Retake, null, tint = colors.onBrand, modifier = Modifier.size(ComposeSpec.retakeIcon))
                     }
                 }
             }

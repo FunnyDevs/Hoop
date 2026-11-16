@@ -19,6 +19,15 @@ kotlin {
             implementation(libs.koin.core)
             implementation(libs.koin.compose.viewmodel)
         }
+        // The live camera: CameraX on Android (AVFoundation on iOS needs no library).
+        androidMain.dependencies {
+            implementation(libs.androidx.activity.compose)
+            implementation(libs.camerax.core)
+            implementation(libs.camerax.camera2)
+            implementation(libs.camerax.lifecycle)
+            implementation(libs.camerax.video)
+            implementation(libs.camerax.view)
+        }
         commonTest.dependencies {
             implementation(libs.kotlinx.coroutines.test)
         }

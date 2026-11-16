@@ -2,6 +2,7 @@ package app.hoop.presentation.home
 
 import app.hoop.domain.identity.AppNotification
 import app.hoop.domain.post.FeedPost
+import app.hoop.domain.post.MediaRef
 import app.hoop.domain.post.PostType
 
 /** A Hoop as shown in the bar and drawn on the map. */
@@ -22,7 +23,11 @@ enum class ToastKind { Published }
 
 class ToastUi(val kind: ToastKind, val hoopId: String)
 
-class ComposerUi(val type: PostType, val text: String = "", val mediaIndex: Int = 0, val showError: Boolean = false)
+/** The sheet that writes a post. A photo or video post carries the one [media] taken live with the camera. */
+class ComposerUi(val type: PostType, val text: String = "", val media: MediaRef? = null, val showError: Boolean = false)
+
+/** The full-screen camera flow: live camera while [media] is `null`, the confirmation of the shot once it exists. */
+class CaptureUi(val media: MediaRef? = null)
 
 data class HomeUiState(
     val isLoading: Boolean = true,
@@ -38,6 +43,7 @@ data class HomeUiState(
     val flownPostIds: Set<String> = emptySet(),
     val askBarOpen: Boolean = false,
     val composer: ComposerUi? = null,
+    val capture: CaptureUi? = null,
     val notificationsOpen: Boolean = false,
     val notifications: List<AppNotification> = emptyList(),
     val toast: ToastUi? = null,
@@ -61,9 +67,17 @@ sealed interface HomeIntent {
     data object AskBarToggled : HomeIntent
     data object AskBarDismissed : HomeIntent
     data class ComposerOpened(val type: PostType) : HomeIntent
-    data class ComposerTypeChanged(val type: PostType) : HomeIntent
     data class ComposerTextChanged(val value: String) : HomeIntent
-    data class ComposerMediaPicked(val index: Int) : HomeIntent
+    /** The camera button of the ask bar, or the retake button of the composer. */
+    data object CameraRequested : HomeIntent
+    /** The X of the live camera: leave without keeping anything. */
+    data object CameraClosed : HomeIntent
+    /** The camera took a photo or finished a video (the position is added by the ViewModel). */
+    data class MediaCaptured(val media: MediaRef) : HomeIntent
+    /** The X of the confirmation: throw the shot away and go back to the live camera. */
+    data object CaptureDiscarded : HomeIntent
+    /** The tick of the confirmation: keep the shot and write its caption. */
+    data object CaptureConfirmed : HomeIntent
     data object ComposerPublished : HomeIntent
     data object ComposerDismissed : HomeIntent
     data object NotificationsToggled : HomeIntent

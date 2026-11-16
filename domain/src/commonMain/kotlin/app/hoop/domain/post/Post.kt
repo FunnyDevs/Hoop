@@ -3,6 +3,7 @@ package app.hoop.domain.post
 import app.hoop.domain.common.DomainResult
 import app.hoop.domain.common.PostPolicy
 import app.hoop.domain.common.Violation
+import app.hoop.domain.geo.GeoPoint
 import app.hoop.domain.hoop.Hoop
 import app.hoop.domain.hoop.HoopId
 import app.hoop.domain.identity.UserId
@@ -26,8 +27,22 @@ value class PostText private constructor(val value: String) {
     }
 }
 
-/** Value Object: reference to a local media file to upload. */
-data class MediaRef(val uri: String, val mimeType: String)
+/**
+ * Value Object: reference to a local media file to upload.
+ * Photos and videos can only come from the in-app camera, so a live capture carries the moment it was taken
+ * ([capturedAtEpochMillis]) and, when the position was known, where ([location]).
+ */
+data class MediaRef(
+    val uri: String,
+    val mimeType: String,
+    val capturedAtEpochMillis: Long? = null,
+    val location: GeoPoint? = null,
+    /** Length of a video; `null` for a photo. */
+    val durationMillis: Long? = null,
+) {
+    /** True when the file was captured by the in-app camera (it has a capture time). */
+    val isLiveCapture: Boolean get() = capturedAtEpochMillis != null
+}
 
 /** Entity: an already published post. */
 class Post(
@@ -47,7 +62,7 @@ class Post(
 
 /**
  * Draft of a new post. It can only be created with [PostDraft.create], which applies the rules:
- * the type must be accepted by the Hoop, a question requires text, photos and videos require a file.
+ * the type must be accepted by the Hoop, a question requires text, photos and videos require a file taken live with the camera.
  */
 class PostDraft private constructor(
     val type: PostType,
@@ -66,6 +81,7 @@ class PostDraft private constructor(
                 else -> null
             }
             if (type != PostType.Question && media == null) return DomainResult.failure(Violation.PostMediaMissing)
+            if (type != PostType.Question && media?.isLiveCapture != true) return DomainResult.failure(Violation.PostMediaNotLive)
             return DomainResult.success(PostDraft(type, hoop.id, text, if (type == PostType.Question) null else media))
         }
     }

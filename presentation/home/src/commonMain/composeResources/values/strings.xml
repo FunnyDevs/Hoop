@@ -63,7 +63,27 @@
     <string name="composer_hint_question">Cosa vuoi chiedere a chi è qui intorno?</string>
     <string name="composer_hint_media">Aggiungi una didascalia</string>
     <string name="composer_empty_error">Scrivi qualcosa prima di pubblicare</string>
-    <string name="composer_media_option">Immagine di esempio %1$d</string>
+    <string name="composer_media_thumb">Il tuo scatto</string>
+    <string name="composer_retake">Rifai lo scatto</string>
+    <string name="action_camera">Scatta una foto o gira un video</string>
+
+    <!-- Live camera: photos and videos are only taken on the spot, never from the gallery -->
+    <string name="camera_hint">Tocca per la foto · tieni premuto per il video</string>
+    <string name="camera_close">Chiudi la camera</string>
+    <string name="camera_flash_on">Flash acceso</string>
+    <string name="camera_flash_off">Flash spento</string>
+    <string name="camera_switch">Cambia camera</string>
+    <string name="camera_shutter">Scatta</string>
+    <string name="camera_permission_title">Serve la camera</string>
+    <string name="camera_permission_body">Su Hoop ci sono solo foto e video fatti sul momento, con la camera dell\'app. Per questo servono la camera e il microfono: senza uno dei due non puoi pubblicarli.</string>
+    <string name="camera_permission_blocked">Hai negato l\'accesso a camera o microfono. Per pubblicare foto e video riattivali dalle impostazioni dell\'app.</string>
+    <string name="camera_permission_allow">Consenti camera e microfono</string>
+    <string name="camera_permission_settings">Apri le impostazioni</string>
+    <string name="capture_taken_now">Scattata ora</string>
+    <string name="capture_discard">Scarta</string>
+    <string name="capture_confirm">Usa</string>
+    <string name="capture_sound_on">Attiva l\'audio</string>
+    <string name="capture_sound_off">Disattiva l\'audio</string>
     <string name="user_initials">TU</string>
     <string name="toast_published">Pubblicato in %1$s</string>
 

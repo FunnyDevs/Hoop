@@ -68,3 +68,12 @@ To migrate another feature: 1) model and rules in `domain` with tests; 2) reposi
 ## Adding a feature
 
 A new `presentation:<name>` module with the same `build.gradle.kts` as `presentation:onboarding` (no dependency on `data`), its own Koin module, and an entry in `Koin.kt` and in the navigation. Add its path to the rules in `ArchitectureCheckPlugin.kt`.
+
+## Live camera (photos and videos)
+
+Photos and videos are only taken live, with the camera of the app, never picked from the gallery: it is the guarantee that they are authentic and from that moment. The domain enforces it (`PostDraft` refuses a `MediaRef` without `capturedAtEpochMillis`, `Violation.PostMediaNotLive`); the capture time and, when known, the position travel with the media.
+
+- UI flow in `presentation:home` (`camera/HomeCamera.kt`): live camera, confirmation of the shot, composer with the single thumbnail. State in `HomeUiState.capture` and `ComposerUi.media`.
+- What depends on the platform sits behind `CameraHandle` and a few `expect` functions (`camera/CameraPlatform.kt`): CameraX on Android, AVFoundation on iOS. Files go to the private cache of the app.
+- Camera and microphone are both required (a video without sound is not accepted): without them the camera screen explains why and sends the user to the settings. A tap takes a photo, a press held for 0.5 s records up to 15 s (`PostPolicy`).
+- iOS: written but never compiled (no Xcode here); the Info.plist needs `NSCameraUsageDescription` and `NSMicrophoneUsageDescription`.
