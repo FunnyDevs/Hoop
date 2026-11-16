@@ -18,6 +18,9 @@ internal interface CameraHandle {
     fun toggleFlash()
     fun switchLens()
 
+    /** Focuses and measures the light on a point of the preview, given as fractions (0..1) of its width and height. */
+    fun focusAt(fractionX: Float, fractionY: Float)
+
     /** Takes a photo; `null` if the camera could not. */
     suspend fun takePhoto(): MediaRef?
 
@@ -54,9 +57,12 @@ internal expect fun rememberCameraHandle(): CameraHandle
 @Composable
 internal expect fun LiveCameraPreview(handle: CameraHandle, modifier: Modifier)
 
-/** Plays a video file again and again; [onProgress] reports 0..1 of the current loop. */
+/** A request to jump to a point of the video; every request is a new object, so asking for the same point twice works. */
+internal class SeekRequest(val fraction: Float)
+
+/** Plays a video file again and again; [onProgress] reports 0..1 of the current loop and [seek] moves the playback. */
 @Composable
-internal expect fun LoopingVideo(uri: String, muted: Boolean, onProgress: (Float) -> Unit, modifier: Modifier)
+internal expect fun LoopingVideo(uri: String, muted: Boolean, seek: SeekRequest?, onProgress: (Float) -> Unit, modifier: Modifier)
 
 /** Decodes a photo, or the first frame of a video, from a local file; `null` while it loads or if it cannot be read. */
 @Composable

@@ -14,6 +14,7 @@ import android.media.ExifInterface
 import android.media.MediaMetadataRetriever
 import android.media.MediaPlayer
 import android.net.Uri
+import android.os.Build
 import android.provider.Settings
 import android.view.Surface
 import android.view.TextureView
@@ -21,6 +22,7 @@ import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.camera.core.CameraSelector
 import androidx.camera.core.Camera
+import androidx.camera.core.FocusMeteringAction
 import androidx.camera.core.ImageCapture
 import androidx.camera.core.ImageCaptureException
 import androidx.camera.core.Preview
@@ -190,6 +192,14 @@ private class AndroidCameraHandle(private val context: Context) : CameraHandle {
         applyFlash()
     }
 
+    override fun focusAt(fractionX: Float, fractionY: Float) {
+        val view = previewView ?: return
+        val control = camera?.cameraControl ?: return
+        val point = view.meteringPointFactory.createPoint(fractionX * view.width, fractionY * view.height)
+        // Front cameras are often fixed-focus: asking is harmless, the request is just dropped.
+        runCatching { control.startFocusAndMetering(FocusMeteringAction.Builder(point).build()) }
+    }
+
     override fun switchLens() {
         if (recording != null) return
         isFrontLens = !isFrontLens
@@ -313,6 +323,19 @@ private class LoopingVideoView(context: Context) : TextureView(context), Texture
         }
     }
 
+    private var lastSeek: SeekRequest? = null
+
+    /** Jumps to a point of the video, once per request. */
+    fun seekOnce(request: SeekRequest) {
+        if (request === lastSeek) return
+        lastSeek = request
+        val p = player ?: return
+        val total = p.duration
+        if (total <= 0) return
+        val target = (total * request.fraction.coerceIn(0f, 1f)).toInt()
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) p.seekTo(target.toLong(), MediaPlayer.SEEK_CLOSEST) else p.seekTo(target)
+    }
+
     /** 0..1 of the current loop. */
     fun progress(): Float {
         val p = player ?: return 0f
@@ -353,7 +376,7 @@ private class LoopingVideoView(context: Context) : TextureView(context), Texture
 }
 
 @Composable
-internal actual fun LoopingVideo(uri: String, muted: Boolean, onProgress: (Float) -> Unit, modifier: Modifier) {
+internal actual fun LoopingVideo(uri: String, muted: Boolean, seek: SeekRequest?, onProgress: (Float) -> Unit, modifier: Modifier) {
     val view = remember { mutableStateOf<LoopingVideoView?>(null) }
     LaunchedEffect(view.value) {
         val video = view.value ?: return@LaunchedEffect
@@ -364,7 +387,10 @@ internal actual fun LoopingVideo(uri: String, muted: Boolean, onProgress: (Float
     }
     AndroidView(
         factory = { context -> LoopingVideoView(context).also { view.value = it } },
-        update = { it.show(uri, muted) },
+        update = {
+            it.show(uri, muted)
+            seek?.let(it::seekOnce)
+        },
         onRelease = { it.release() },
         modifier = modifier,
     )

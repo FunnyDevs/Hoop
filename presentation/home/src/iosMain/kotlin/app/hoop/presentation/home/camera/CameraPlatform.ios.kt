@@ -64,9 +64,19 @@ import platform.AVFoundation.play
 import platform.AVFoundation.requestAccessForMediaType
 import platform.AVFoundation.seekToTime
 import platform.AVFoundation.setTorchMode
-import platform.CoreGraphics.CGRectMake
+import kotlinx.cinterop.useContents
+import platform.AVFoundation.AVCaptureExposureModeAutoExpose
+import platform.AVFoundation.AVCaptureFocusModeAutoFocus
+import platform.AVFoundation.exposureMode
+import platform.AVFoundation.exposurePointOfInterest
+import platform.AVFoundation.focusMode
+import platform.AVFoundation.focusPointOfInterest
+import platform.AVFoundation.isExposurePointOfInterestSupported
+import platform.AVFoundation.isFocusPointOfInterestSupported
+import platform.CoreGraphics.CGPointMake
 import platform.CoreMedia.CMTimeGetSeconds
 import platform.CoreMedia.CMTimeMake
+import platform.CoreMedia.CMTimeMakeWithSeconds
 import platform.Foundation.NSData
 import platform.Foundation.NSDate
 import platform.Foundation.NSFileManager
@@ -187,6 +197,26 @@ private class IosCameraHandle : CameraHandle {
         isReady = false
     }
 
+    /** The layer showing the preview, needed to turn a point of the screen into a point of the camera. */
+    var previewLayer: AVCaptureVideoPreviewLayer? = null
+
+    override fun focusAt(fractionX: Float, fractionY: Float) {
+        val layer = previewLayer ?: return
+        val device = videoInput?.device ?: return
+        val size = layer.bounds.useContents { size }
+        val point = layer.captureDevicePointOfInterestForPoint(CGPointMake(fractionX * size.width, fractionY * size.height))
+        if (!device.lockForConfiguration(null)) return
+        if (device.isFocusPointOfInterestSupported()) {
+            device.focusPointOfInterest = point
+            device.focusMode = AVCaptureFocusModeAutoFocus
+        }
+        if (device.isExposurePointOfInterestSupported()) {
+            device.exposurePointOfInterest = point
+            device.exposureMode = AVCaptureExposureModeAutoExpose
+        }
+        device.unlockForConfiguration()
+    }
+
     override fun toggleFlash() { isFlashOn = !isFlashOn }
 
     override fun switchLens() {
@@ -272,7 +302,12 @@ internal actual fun rememberCameraHandle(): CameraHandle {
 @Composable
 internal actual fun LiveCameraPreview(handle: CameraHandle, modifier: Modifier) {
     val camera = handle as? IosCameraHandle ?: return
-    val previewLayer = remember { AVCaptureVideoPreviewLayer(session = camera.session).also { it.videoGravity = AVLayerVideoGravityResizeAspectFill } }
+    val previewLayer = remember {
+        AVCaptureVideoPreviewLayer(session = camera.session).also {
+            it.videoGravity = AVLayerVideoGravityResizeAspectFill
+            camera.previewLayer = it
+        }
+    }
     UIKitView(
         factory = { UIView().also { it.layer.addSublayer(previewLayer) } },
         modifier = modifier,
@@ -286,7 +321,7 @@ internal actual fun LiveCameraPreview(handle: CameraHandle, modifier: Modifier) 
 
 @OptIn(ExperimentalForeignApi::class)
 @Composable
-internal actual fun LoopingVideo(uri: String, muted: Boolean, onProgress: (Float) -> Unit, modifier: Modifier) {
+internal actual fun LoopingVideo(uri: String, muted: Boolean, seek: SeekRequest?, onProgress: (Float) -> Unit, modifier: Modifier) {
     val player = remember(uri) { AVPlayer(playerItem = AVPlayerItem(uRL = NSURL.fileURLWithPath(uri))) }
     val layer = remember(player) { AVPlayerLayer.playerLayerWithPlayer(player).also { it.videoGravity = AVLayerVideoGravityResizeAspectFill } }
     player.muted = muted
@@ -300,6 +335,11 @@ internal actual fun LoopingVideo(uri: String, muted: Boolean, onProgress: (Float
             player.pause()
             NSNotificationCenter.defaultCenter.removeObserver(observer)
         }
+    }
+    LaunchedEffect(seek) {
+        val request = seek ?: return@LaunchedEffect
+        val total = player.currentItem?.duration?.let { CMTimeGetSeconds(it) } ?: return@LaunchedEffect
+        if (total > 0.0 && !total.isNaN()) player.seekToTime(CMTimeMakeWithSeconds(total * request.fraction.coerceIn(0f, 1f), VIDEO_TIMESCALE))
     }
     LaunchedEffect(player) {
         while (true) {

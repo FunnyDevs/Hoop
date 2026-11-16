@@ -1,6 +1,12 @@
 package app.hoop.presentation.home.camera
 
+import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.gestures.detectHorizontalDragGestures
+import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.ui.util.lerp
+import kotlinx.coroutines.delay
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -100,6 +106,12 @@ private object CameraSpec {
     const val SECONDS_PER_MINUTE = 60L
     const val RING_START_ANGLE = -90f
     const val FULL_TURN = 360f
+    val seekPad = 14.dp
+    val focusRing = 72.dp
+    val focusStroke = 2.dp
+    const val FOCUS_START_SCALE = 1.4f
+    const val FOCUS_SETTLE_MILLIS = 220
+    const val FOCUS_HOLD_MILLIS = 700L
     val gradientTop = 140.dp
     val gradientBottom = 260.dp
 }
@@ -168,6 +180,7 @@ private fun LiveCamera(onIntent: (HomeIntent) -> Unit) {
 
     Box(Modifier.fillMaxSize()) {
         LiveCameraPreview(camera, Modifier.fillMaxSize())
+        FocusLayer(camera)
         Shades()
         val top = WindowInsets.statusBars.asPaddingValues().calculateTopPadding() + CameraSpec.topExtra
         RoundGlass(HoopIcons.Close, stringResource(Res.string.camera_close), { onIntent(HomeIntent.CameraClosed) },
@@ -203,6 +216,36 @@ private fun LiveCamera(onIntent: (HomeIntent) -> Unit) {
             onHoldEnd = ::stopRecording,
             modifier = Modifier.align(Alignment.BottomCenter).padding(bottom = bottom),
         )
+    }
+}
+
+/** Where the last tap to focus happened; a new object for every tap, so tapping the same spot again restarts the ring. */
+private class FocusTap(val position: Offset)
+
+/** Tap anywhere on the picture to focus there: the camera focuses and a ring settles on the spot for a moment. */
+@Composable
+private fun FocusLayer(camera: CameraHandle) {
+    var tap by remember { mutableStateOf<FocusTap?>(null) }
+    val settle = remember { Animatable(1f) }
+    val ringColor = HoopTheme.colors.onScrim
+    LaunchedEffect(tap) {
+        if (tap == null) return@LaunchedEffect
+        settle.snapTo(0f)
+        settle.animateTo(1f, tween(CameraSpec.FOCUS_SETTLE_MILLIS))
+        delay(CameraSpec.FOCUS_HOLD_MILLIS)
+        tap = null
+    }
+    Canvas(
+        Modifier.fillMaxSize().pointerInput(camera) {
+            detectTapGestures { position ->
+                camera.focusAt(position.x / size.width, position.y / size.height)
+                tap = FocusTap(position)
+            }
+        },
+    ) {
+        val current = tap ?: return@Canvas
+        val radius = lerp(CameraSpec.focusRing.toPx() * CameraSpec.FOCUS_START_SCALE, CameraSpec.focusRing.toPx(), settle.value) / 2f
+        drawCircle(ringColor, radius, current.position, style = Stroke(CameraSpec.focusStroke.toPx()))
     }
 }
 
@@ -293,21 +336,41 @@ private fun ConfirmScreen(media: MediaRef, onIntent: (HomeIntent) -> Unit) {
     val colors = HoopTheme.colors
     var muted by remember(media.uri) { mutableStateOf(true) }
     var progress by remember(media.uri) { mutableFloatStateOf(0f) }
+    var seek by remember(media.uri) { mutableStateOf<SeekRequest?>(null) }
+    var scrubbing by remember(media.uri) { mutableStateOf(false) }
     BoxWithConstraints(Modifier.fillMaxSize()) {
         val unit = maxWidth / CameraSpec.designWidth
+        fun seekTo(fraction: Float) {
+            val point = fraction.coerceIn(0f, 1f)
+            progress = point
+            seek = SeekRequest(point)
+        }
         if (media.isVideo) {
-            LoopingVideo(media.uri, muted, { progress = it }, Modifier.fillMaxSize())
+            // While the finger drags the bar, the position of the finger wins over the one the player reports.
+            LoopingVideo(media.uri, muted, seek, { if (!scrubbing) progress = it }, Modifier.fillMaxSize())
         } else {
             rememberMediaBitmap(media.uri)?.let { Image(it, null, Modifier.fillMaxSize(), contentScale = ContentScale.Crop) }
         }
         Shades()
         val top = WindowInsets.statusBars.asPaddingValues().calculateTopPadding()
         if (media.isVideo) {
+            // The progress bar is also a slider: tap a point, or drag, to jump there. The touch area is taller than the line.
             Box(
-                Modifier.align(Alignment.TopStart).padding(start = CameraSpec.edge, end = CameraSpec.edge, top = top + CameraSpec.topExtra - 4.dp)
-                    .fillMaxWidth().height(CameraSpec.progressHeight).background(colors.onScrim.copy(alpha = 0.3f), HoopTheme.shapes.circle),
+                Modifier.align(Alignment.TopStart).padding(top = top + CameraSpec.topExtra - 4.dp - CameraSpec.seekPad)
+                    .fillMaxWidth().height(CameraSpec.progressHeight + CameraSpec.seekPad * 2).padding(horizontal = CameraSpec.edge)
+                    .pointerInput(media.uri) { detectTapGestures { seekTo(it.x / size.width) } }
+                    .pointerInput(media.uri) {
+                        detectHorizontalDragGestures(
+                            onDragStart = { scrubbing = true; seekTo(it.x / size.width) },
+                            onDragEnd = { scrubbing = false },
+                            onDragCancel = { scrubbing = false },
+                        ) { change, _ -> seekTo(change.position.x / size.width) }
+                    },
+                contentAlignment = Alignment.Center,
             ) {
-                Box(Modifier.fillMaxWidth(progress.coerceIn(0f, 1f)).height(CameraSpec.progressHeight).background(colors.onScrim, HoopTheme.shapes.circle))
+                Box(Modifier.fillMaxWidth().height(CameraSpec.progressHeight).background(colors.onScrim.copy(alpha = 0.3f), HoopTheme.shapes.circle)) {
+                    Box(Modifier.fillMaxWidth(progress.coerceIn(0f, 1f)).height(CameraSpec.progressHeight).background(colors.onScrim, HoopTheme.shapes.circle))
+                }
             }
             Pill(formatClock(media.durationMillis ?: 0L), Modifier.align(Alignment.TopStart).padding(start = CameraSpec.edge, top = top + CameraSpec.topExtra + 12.dp))
             Box(
