@@ -26,8 +26,35 @@ class ToastUi(val kind: ToastKind, val hoopId: String)
 /** The sheet that writes a post. A photo or video post carries the one [media] taken live with the camera. */
 class ComposerUi(val type: PostType, val text: String = "", val media: MediaRef? = null, val showError: Boolean = false)
 
+/** Why a post could not be published and cannot just wait in the queue. */
+enum class PublishFailure { TooFar, TooManyRequests, Generic }
+
+/**
+ * The post being sent, shown as a card at the top while it uploads ([progress], 0 to 1) or, if it failed, with the
+ * reason ([failure]). [media] gives the thumbnail; a question has none.
+ */
+data class PublishingUi(
+    val type: PostType,
+    val hoopId: String,
+    val media: MediaRef?,
+    val progress: Float = 0f,
+    val failure: PublishFailure? = null,
+) {
+    fun withProgress(value: Float) = copy(progress = value.coerceIn(0f, 1f))
+}
+
+/** A post kept on the device until the connection is back. */
+class QueuedPostUi(
+    val id: String,
+    val type: PostType,
+    val text: String,
+    val hoopId: String,
+    val media: MediaRef?,
+    val waitingMinutes: Int,
+)
+
 /** The full-screen camera flow: live camera while [media] is `null`, the confirmation of the shot once it exists. */
-class CaptureUi(val media: MediaRef? = null)
+class CaptureUi(val media: MediaRef? = null, val frontLens: Boolean = false)
 
 data class HomeUiState(
     val isLoading: Boolean = true,
@@ -47,6 +74,13 @@ data class HomeUiState(
     val notificationsOpen: Boolean = false,
     val notifications: List<AppNotification> = emptyList(),
     val toast: ToastUi? = null,
+    val publishing: PublishingUi? = null,
+    /** Posts waiting for the connection, oldest first. */
+    val queued: List<QueuedPostUi> = emptyList(),
+    /** The sheet listing [queued] is open. */
+    val queueOpen: Boolean = false,
+    /** The waiting posts cannot go out until the user signs in again. */
+    val needsSignIn: Boolean = false,
 ) {
     val activeHoop: HoopUi? get() = hoops.firstOrNull { it.id == activeHoopId }
     val selectedPost: FeedPost? get() = posts.getOrNull(selectedIndex)
@@ -72,6 +106,8 @@ sealed interface HomeIntent {
     data object CameraRequested : HomeIntent
     /** The X of the live camera: leave without keeping anything. */
     data object CameraClosed : HomeIntent
+    /** The user switched between the back and the front camera: the next time the camera opens, it opens on that one. */
+    data class CameraLensChanged(val front: Boolean) : HomeIntent
     /** The camera took a photo or finished a video (the position is added by the ViewModel). */
     data class MediaCaptured(val media: MediaRef) : HomeIntent
     /** The X of the confirmation: throw the shot away and go back to the live camera. */
@@ -83,4 +119,14 @@ sealed interface HomeIntent {
     data object NotificationsToggled : HomeIntent
     data class NotificationOpened(val id: String) : HomeIntent
     data object ToastShown : HomeIntent
+    /** The X of the card while a post uploads. */
+    data object PublishCancelled : HomeIntent
+    data object PublishRetried : HomeIntent
+    /** The button of the card of a post that could not be published and has nothing to retry. */
+    data object PublishFailureDismissed : HomeIntent
+    data object QueueOpened : HomeIntent
+    data object QueueClosed : HomeIntent
+    data class QueuedPostCancelled(val id: String) : HomeIntent
+    /** The session expired: the home hands over to the sign-in. */
+    data object SignInRequested : HomeIntent
 }

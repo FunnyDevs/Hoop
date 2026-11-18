@@ -13,10 +13,16 @@ import app.hoop.domain.post.MediaRef
 internal interface CameraHandle {
     /** True once the preview is running and a shot can be taken. */
     val isReady: Boolean
+
+    /** True when the camera could not be opened, for example because another app is using it. */
+    val isUnavailable: Boolean
     val isFlashOn: Boolean
     val isFrontLens: Boolean
     fun toggleFlash()
     fun switchLens()
+
+    /** Tries to open the camera again after it was unavailable. */
+    fun retry()
 
     /** Focuses and measures the light on a point of the preview, given as fractions (0..1) of its width and height. */
     fun focusAt(fractionX: Float, fractionY: Float)
@@ -50,8 +56,9 @@ internal class CameraPermissions(
 @Composable
 internal expect fun rememberCameraPermissions(): CameraPermissions
 
+/** Opens the camera on the front lens when [frontLens] is true, on the back one otherwise. */
 @Composable
-internal expect fun rememberCameraHandle(): CameraHandle
+internal expect fun rememberCameraHandle(frontLens: Boolean): CameraHandle
 
 /** The live picture of the camera, filling its box. */
 @Composable

@@ -21,6 +21,10 @@ object HoopPolicy {
 
 object PostPolicy {
     const val TEXT_MAX_LENGTH = 500
+    /** The server limits the address to about this many characters. */
+    const val ADDRESS_MAX_LENGTH = 200
+    /** Looking up the street must never hold the publication back for longer than this. */
+    const val ADDRESS_LOOKUP_TIMEOUT_MILLIS = 3_000L
     const val VIDEO_MAX_MILLIS = 15_000L
     /** A press shorter than this is a tap: it takes a photo instead of a video. */
     const val VIDEO_MIN_MILLIS = 500L

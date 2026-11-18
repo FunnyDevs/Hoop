@@ -18,6 +18,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalUriHandler
@@ -27,6 +28,8 @@ import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
 import org.koin.compose.koinInject
 import app.hoop.domain.usecase.RestoreSessionUseCase
+import app.hoop.domain.usecase.SignOutUseCase
+import kotlinx.coroutines.launch
 import app.hoop.presentation.home.HomeRoute
 import app.hoop.presentation.onboarding.navigation.OnboardingRoute
 import app.hoop.presentation.onboarding.navigation.onboardingGraph
@@ -58,6 +61,8 @@ private const val MAIL_SCHEME = "mailto:"
 internal fun HoopNavHost(modifier: Modifier = Modifier) {
     // The start screen depends on the saved session: until it is known the themed background shows.
     val restoreSession = koinInject<RestoreSessionUseCase>()
+    val signOut = koinInject<SignOutUseCase>()
+    val scope = rememberCoroutineScope()
     var startDestination by remember { mutableStateOf<String?>(null) }
     LaunchedEffect(Unit) {
         startDestination = if (restoreSession()) HoopRoute.HOME else OnboardingRoute.WELCOME
@@ -86,6 +91,16 @@ internal fun HoopNavHost(modifier: Modifier = Modifier) {
             onSocialSignIn = { /* TODO: sign in with Google, Facebook, Apple */ },
             onOpenMailApp = { runCatching { uriHandler.openUri(MAIL_SCHEME) } },
         )
-        composable(HoopRoute.HOME) { HomeRoute() }
+        composable(HoopRoute.HOME) {
+            HomeRoute(
+                onSignInRequested = {
+                    // The session is no longer valid: sign out here and go to the welcome screen. The waiting posts stay on the device.
+                    scope.launch {
+                        signOut()
+                        navController.navigate(OnboardingRoute.WELCOME) { popUpTo(HoopRoute.HOME) { inclusive = true } }
+                    }
+                },
+            )
+        }
     }
 }

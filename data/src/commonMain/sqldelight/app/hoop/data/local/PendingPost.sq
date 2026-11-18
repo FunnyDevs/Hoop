@@ -1,0 +1,31 @@
+-- Posts waiting to be sent: one row per publishing attempt (clientId), sent oldest first.
+CREATE TABLE PendingPost (
+    clientId TEXT NOT NULL PRIMARY KEY,
+    type TEXT NOT NULL,
+    hoopId TEXT NOT NULL,
+    inInitialHoop INTEGER NOT NULL,
+    text TEXT NOT NULL,
+    mediaUri TEXT,
+    mimeType TEXT,
+    capturedAtEpochMillis INTEGER,
+    durationMillis INTEGER,
+    width INTEGER,
+    height INTEGER,
+    thumbnailUri TEXT,
+    latitude REAL NOT NULL,
+    longitude REAL NOT NULL,
+    address TEXT,
+    queuedAtEpochMillis INTEGER NOT NULL
+);
+
+selectAll:
+SELECT * FROM PendingPost ORDER BY rowid ASC;
+
+upsert:
+INSERT OR REPLACE INTO PendingPost(
+    clientId, type, hoopId, inInitialHoop, text, mediaUri, mimeType, capturedAtEpochMillis, durationMillis,
+    width, height, thumbnailUri, latitude, longitude, address, queuedAtEpochMillis
+) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);
+
+deleteByClientId:
+DELETE FROM PendingPost WHERE clientId = ?;

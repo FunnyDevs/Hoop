@@ -13,7 +13,11 @@ internal fun Throwable.toDomainError(): DomainError = when {
         ParseProtocol.ERROR_EMAIL_TAKEN -> DomainError.EmailAlreadyUsed
         ParseProtocol.ERROR_INVALID_EMAIL -> DomainError.Validation(Violation.EmailInvalid)
         ParseProtocol.ERROR_WRONG_PASSWORD -> DomainError.WrongPassword
-        ParseProtocol.ERROR_INVALID_SESSION -> DomainError.Unauthorized
+        ParseProtocol.ERROR_INVALID_SESSION, ParseProtocol.ERROR_VALIDATION -> DomainError.Unauthorized
+        ParseProtocol.ERROR_TOO_MANY_REQUESTS -> DomainError.TooManyRequests
+        ParseProtocol.ERROR_POST_NOT_ALLOWED -> DomainError.Validation(Violation.PostTypeNotAllowedInHoop)
+        ParseProtocol.ERROR_OUTSIDE_HOOP -> DomainError.Validation(Violation.PositionOutsideHoop)
+        ParseProtocol.ERROR_HOOP_NOT_FOUND -> DomainError.Validation(Violation.HoopNotFound)
         else -> DomainError.Unknown
     }
     // The server answered but the payload is not what the app expects: not a connection problem.

@@ -50,11 +50,17 @@ object HoopIcons {
     val Bell: ImageVector by lazy { line("Bell", STROKE, "M6 17V11a6 6 0 0 1 12 0v6l1.5 2h-15z", "M10 21h4") }
     val Send: ImageVector by lazy { line("Send", STROKE, "M5 12l14-7-5 14-2-6z") }
     val Plus: ImageVector by lazy { line("Plus", 2.4f, "M12 5v14M5 12h14") }
+    val CloudOff: ImageVector by lazy {
+        line("CloudOff", STROKE, "M7 18a4 4 0 0 1-.6-7.95A6 6 0 0 1 17.4 9 4.5 4.5 0 0 1 17 18z", "M4 4l16 16")
+    }
     val Close: ImageVector by lazy { line("Close", 2.4f, "M6 6l12 12M18 6L6 18") }
     val ArrowUp: ImageVector by lazy { line("ArrowUp", STROKE, "M12 19V6M6 11l6-6 6 6") }
     /** Lighter X and heavier tick of the confirmation of a shot. */
     val CloseLight: ImageVector by lazy { line("CloseLight", STROKE, "M6 6l12 12M18 6L6 18") }
     val CheckHeavy: ImageVector by lazy { line("CheckHeavy", 2.8f, "M5 12l5 5L20 7") }
+    val CameraOff: ImageVector by lazy {
+        line("CameraOff", THIN_STROKE, "M4 8h3l2-3h6l2 3h3v11H4z", "M12 9.5a3.5 3.5 0 1 0 0 7 3.5 3.5 0 0 0 0-7z", "M4 4l16 16")
+    }
     val Flash: ImageVector by lazy { line("Flash", STROKE, "M13 3L5 14h6l-1 7 8-11h-6z") }
     val FlashOff: ImageVector by lazy { line("FlashOff", STROKE, "M13 3L5 14h6l-1 7 8-11h-6z", "M4 4l16 16") }
     val FlipCamera: ImageVector by lazy {

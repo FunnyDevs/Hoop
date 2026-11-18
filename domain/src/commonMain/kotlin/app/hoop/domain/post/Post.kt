@@ -39,10 +39,31 @@ data class MediaRef(
     val location: GeoPoint? = null,
     /** Length of a video; `null` for a photo. */
     val durationMillis: Long? = null,
+    /** Size in pixels as the viewer sees it, after any rotation; `null` if the device could not read it. */
+    val width: Int? = null,
+    val height: Int? = null,
+    /** Still image of a video (its first frame), already a JPEG file of the app's cache; `null` for a photo or if it could not be made. */
+    val thumbnailUri: String? = null,
 ) {
+    /** Landscape, portrait or square, when the size is known. */
+    val orientation: MediaOrientation?
+        get() {
+            val w = width ?: return null
+            val h = height ?: return null
+            return when {
+                w <= 0 || h <= 0 -> null
+                w > h -> MediaOrientation.Landscape
+                w < h -> MediaOrientation.Portrait
+                else -> MediaOrientation.Square
+            }
+        }
+
     /** True when the file was captured by the in-app camera (it has a capture time). */
     val isLiveCapture: Boolean get() = capturedAtEpochMillis != null
 }
+
+/** How a photo or video is held when watched. */
+enum class MediaOrientation { Landscape, Portrait, Square }
 
 /** Entity: an already published post. */
 class Post(
@@ -50,7 +71,7 @@ class Post(
     val authorId: UserId,
     val hoopId: HoopId?,
     val type: PostType,
-    val text: PostText?,
+    val text: PostText,
     val mediaUrl: String?,
     val createdAtEpochMillis: Long,
     val commentsCount: Int,
@@ -62,27 +83,61 @@ class Post(
 
 /**
  * Draft of a new post. It can only be created with [PostDraft.create], which applies the rules:
- * the type must be accepted by the Hoop, a question requires text, photos and videos require a file taken live with the camera.
+ * the type must be accepted by the Hoop, every post requires text (the caption for photos and videos), photos and videos require a file taken live with the camera.
  */
 class PostDraft private constructor(
     val type: PostType,
     val hoopId: HoopId,
-    val text: PostText?,
+    /** True for the initial Hoop, which follows the user; the others are identified by [hoopId]. */
+    val inInitialHoop: Boolean,
+    val text: PostText,
     val media: MediaRef?,
+    /** Where the user is when publishing: the post belongs to this place. */
+    val position: GeoPoint,
+    /** Street where the post is published, when the device could tell; the post is published without it otherwise. */
+    val address: String?,
+    /** Identifies this attempt: repeating it with the same id never creates the post twice. */
+    val clientId: String,
 ) {
     companion object {
-        fun create(hoop: Hoop, type: PostType, rawText: String, media: MediaRef? = null): DomainResult<PostDraft> {
+        /**
+         * Rebuilds a draft that was saved on the device (see [app.hoop.domain.PendingPostsRepository]), applying the
+         * rules that do not depend on the Hoop again. The Hoop itself was checked when the draft was first created.
+         */
+        fun restore(
+            type: PostType,
+            hoopId: HoopId,
+            inInitialHoop: Boolean,
+            rawText: String,
+            media: MediaRef?,
+            position: GeoPoint,
+            address: String?,
+            clientId: String,
+        ): DomainResult<PostDraft> {
+            val text = when (val r = PostText.create(rawText)) {
+                is DomainResult.Success -> r.value
+                is DomainResult.Failure -> return r
+            }
+            if (type != PostType.Question && media?.isLiveCapture != true) return DomainResult.failure(Violation.PostMediaNotLive)
+            if (!inInitialHoop && type != PostType.Question) return DomainResult.failure(Violation.PostTypeNotAllowedInHoop)
+            val cleanAddress = address?.trim()?.take(PostPolicy.ADDRESS_MAX_LENGTH)?.ifBlank { null }
+            return DomainResult.success(
+                PostDraft(type, hoopId, inInitialHoop, text, if (type == PostType.Question) null else media, position, cleanAddress, clientId),
+            )
+        }
+
+        fun create(hoop: Hoop, type: PostType, rawText: String, media: MediaRef?, position: GeoPoint, clientId: String, address: String? = null): DomainResult<PostDraft> {
             if (!hoop.accepts(type)) return DomainResult.failure(Violation.PostTypeNotAllowedInHoop)
-            val text: PostText? = when {
-                type == PostType.Question || rawText.isNotBlank() -> when (val r = PostText.create(rawText)) {
-                    is DomainResult.Success -> r.value
-                    is DomainResult.Failure -> return r
-                }
-                else -> null
+            // Every post needs text: the question itself, or the caption of a photo or video.
+            val text: PostText = when (val r = PostText.create(rawText)) {
+                is DomainResult.Success -> r.value
+                is DomainResult.Failure -> return r
             }
             if (type != PostType.Question && media == null) return DomainResult.failure(Violation.PostMediaMissing)
             if (type != PostType.Question && media?.isLiveCapture != true) return DomainResult.failure(Violation.PostMediaNotLive)
-            return DomainResult.success(PostDraft(type, hoop.id, text, if (type == PostType.Question) null else media))
+            return DomainResult.success(
+                PostDraft(type, hoop.id, hoop is Hoop.Home, text, if (type == PostType.Question) null else media, position, address?.trim()?.take(PostPolicy.ADDRESS_MAX_LENGTH)?.ifBlank { null }, clientId),
+            )
         }
     }
 }

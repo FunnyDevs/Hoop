@@ -110,9 +110,12 @@ private object HomeSpec {
 
 /** Entry point: connects the ViewModel to the screen. */
 @Composable
-fun HomeRoute(viewModel: HomeViewModel = koinViewModel(), config: HomeConfig = koinInject()) {
+fun HomeRoute(onSignInRequested: () -> Unit = {}, viewModel: HomeViewModel = koinViewModel(), config: HomeConfig = koinInject()) {
     val state by viewModel.state.collectAsState()
-    HomeScreen(state, config, viewModel::onIntent)
+    HomeScreen(state, config) { intent ->
+        // Leaving for the sign-in is the host's job; everything else is the ViewModel's.
+        if (intent == HomeIntent.SignInRequested) onSignInRequested() else viewModel.onIntent(intent)
+    }
 }
 
 @Composable
@@ -351,6 +354,10 @@ fun HomeScreen(state: HomeUiState, config: HomeConfig, onIntent: (HomeIntent) ->
             HoopToast(stringResource(Res.string.toast_published, name))
         }
         LaunchedEffect(toast) { if (toast != null) { delay(HomeSpec.TOAST_MILLIS); onIntent(HomeIntent.ToastShown) } }
+
+        // ---- A post in flight, failed or waiting for the connection, and the sheet listing the waiting ones ----
+        PublishStatusCard(state, top = headerTop, onIntent = onIntent, modifier = Modifier.align(Alignment.TopCenter))
+        QueueSheet(state, onIntent)
 
         // ---- Live camera and confirmation of the shot: above everything ----
         state.capture?.let { capture ->

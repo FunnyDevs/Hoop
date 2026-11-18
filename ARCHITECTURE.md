@@ -77,3 +77,21 @@ Photos and videos are only taken live, with the camera of the app, never picked 
 - What depends on the platform sits behind `CameraHandle` and a few `expect` functions (`camera/CameraPlatform.kt`): CameraX on Android, AVFoundation on iOS. Files go to the private cache of the app.
 - Camera and microphone are both required (a video without sound is not accepted): without them the camera screen explains why and sends the user to the settings. A tap takes a photo, a press held for 0.5 s records up to 15 s (`PostPolicy`).
 - iOS: written but never compiled (no Xcode here); the Info.plist needs `NSCameraUsageDescription` and `NSMicrophoneUsageDescription`.
+
+## Publishing posts
+
+`PublishPostUseCase` builds a `PostDraft` (type rules, live media, current position) and hands it to `PostsRepository`. `ParsePostsRepository` (data) uploads the photo or video with `POST /files/{name}` and then calls the Cloud Function `saveNewPost` (`type` Q/P/V, position, `hoopId` only for extra Hoops, the uploaded file as a Parse File reference, `cuuid`). The bytes of the camera file are read through the `MediaFileReader` port, implemented per platform in `composeApp` (Android `File`, iOS `NSData`). Server refusals map to domain errors: 5003 `PostTypeNotAllowedInHoop`, 5004 `PositionOutsideHoop`, 5005 `HoopNotFound`. Without server configuration (or without a reader) the fake store is used.
+
+The street of a post is found on the device through the `AddressResolver` port (Android `Geocoder`, iOS `CLGeocoder`) and sent as the optional `address`; the server never geocodes. The lookup is best effort and bounded (`PostPolicy.ADDRESS_LOOKUP_TIMEOUT_MILLIS`): without a street the post is published all the same. The address is capped at `PostPolicy.ADDRESS_MAX_LENGTH`.
+
+Media metadata is produced on the device by the camera code and travels in `MediaRef` (`width`/`height` as the viewer sees them, `durationMillis`, and for a video `thumbnailUri`, its first frame saved as a JPEG). `MediaRef.orientation` (landscape/portrait/square) is derived from the size. `saveNewPost` receives `orientation`, `width`, `height`, `durationMillis` (videos only) and `thumbnail` (a file uploaded as `{cuuid}-thumb.jpg`); the thumbnail is best effort and never blocks publishing.
+
+## Offline queue of posts
+
+When publishing fails because there is no connection (`DomainError.Network`), `PublishPostUseCase` does not lose the post: it saves the `PostDraft` through the `PendingPostsRepository` port and answers `PublishOutcome.Queued`. `SendPendingPostsUseCase` sends the waiting posts oldest first: it removes what went out, stops (keeping the rest) when the network or the session fails again, and discards what the server refuses for good. The home runs it when it opens and after each successful publication. The same `clientId` is used on every try, so the server never creates a post twice.
+
+The queue lives in a local SQLite database (SQLDelight 2.0.2, schema in `data/src/commonMain/sqldelight`, Android and native drivers provided by the platform modules through `SqlDriverFactory`; without one the queue is in memory). Only the data of the draft is saved: the photo or video stays in the private cache of the app, so if the system clears it before the post is sent, the post is discarded.
+
+### Publishing feedback in the home
+
+The composer closes as soon as the user taps publish. A card at the top of the home (`HomePublish.kt`) follows the post: upload progress with an X to cancel (`PostsRepository.publish(draft, onProgress)`), the reason and a button when it failed (too far, too many requests, generic), or the waiting posts when there is no connection. Tapping the queue card opens the sheet "In attesa di rete", where each waiting post can be cancelled. When the session expired the posts are kept too and the card asks to sign in again (`HomeRoute(onSignInRequested)`: the host signs out and goes to the welcome screen). Any change to the local database schema needs a numbered migration (`data/src/commonMain/sqldelight/.../N.sqm`).

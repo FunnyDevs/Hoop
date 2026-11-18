@@ -70,6 +70,9 @@ private const val CAPTURES_DIR = "captures"
 private const val PHOTO_EXTENSION = ".jpg"
 private const val NANOS_PER_MILLI = 1_000_000L
 private const val MAX_BITMAP_SIDE = 1600
+private const val THUMBNAIL_QUALITY = 80
+private const val UPLOAD_MAX_SIDE = 1600
+private const val UPLOAD_JPEG_QUALITY = 85
 private const val PROGRESS_POLL_MILLIS = 40L
 private const val PACKAGE_SCHEME = "package"
 
@@ -130,12 +133,14 @@ internal actual fun rememberCameraPermissions(): CameraPermissions {
 private class FinishedVideo(val file: File, val durationMillis: Long)
 
 /** CameraX camera: a live preview, JPEG photos and MP4 video with sound, saved in the private cache of the app. */
-private class AndroidCameraHandle(private val context: Context) : CameraHandle {
+private class AndroidCameraHandle(private val context: Context, frontLens: Boolean) : CameraHandle {
     override var isReady by mutableStateOf(false)
+        private set
+    override var isUnavailable by mutableStateOf(false)
         private set
     override var isFlashOn by mutableStateOf(false)
         private set
-    override var isFrontLens by mutableStateOf(false)
+    override var isFrontLens by mutableStateOf(frontLens)
         private set
 
     private val mainExecutor = ContextCompat.getMainExecutor(context)
@@ -172,7 +177,12 @@ private class AndroidCameraHandle(private val context: Context) : CameraHandle {
         val lifecycleOwner = owner ?: return
         val future = ProcessCameraProvider.getInstance(context)
         future.addListener({
-            val cameraProvider = future.get()
+            val cameraProvider = try {
+                future.get()
+            } catch (e: Exception) {
+                isUnavailable = true
+                return@addListener
+            }
             provider = cameraProvider
             val preview = Preview.Builder().build().also { it.surfaceProvider = view.surfaceProvider }
             val selector = if (isFrontLens) CameraSelector.DEFAULT_FRONT_CAMERA else CameraSelector.DEFAULT_BACK_CAMERA
@@ -181,10 +191,19 @@ private class AndroidCameraHandle(private val context: Context) : CameraHandle {
                 camera = cameraProvider.bindToLifecycle(lifecycleOwner, selector, preview, imageCapture, videoCapture)
                 applyFlash()
                 isReady = true
+                isUnavailable = false
             } catch (e: Exception) {
+                // No such camera, or another app is holding it.
                 isReady = false
+                isUnavailable = true
             }
         }, mainExecutor)
+    }
+
+    override fun retry() {
+        isUnavailable = false
+        isReady = false
+        bind()
     }
 
     override fun toggleFlash() {
@@ -225,7 +244,10 @@ private class AndroidCameraHandle(private val context: Context) : CameraHandle {
                 override fun onError(exception: ImageCaptureException) { if (continuation.isActive) continuation.resume(false) }
             })
         }
-        return if (saved) MediaRef(file.absolutePath, PHOTO_MIME_TYPE, capturedAtEpochMillis = capturedAt) else null
+        if (!saved) return null
+        // Shrunk right away: what is shown, kept and uploaded is the small version, already turned upright.
+        val size = withContext(Dispatchers.IO) { shrinkPhoto(file) ?: photoSize(file.absolutePath) }
+        return MediaRef(file.absolutePath, PHOTO_MIME_TYPE, capturedAtEpochMillis = capturedAt, width = size?.first, height = size?.second)
     }
 
     override suspend fun startVideo(): Boolean {
@@ -268,7 +290,11 @@ private class AndroidCameraHandle(private val context: Context) : CameraHandle {
         active.stop()
         camera?.cameraControl?.enableTorch(false)
         val video = finished?.await() ?: return null
-        return MediaRef(video.file.absolutePath, VIDEO_MIME_TYPE, capturedAtEpochMillis = videoStartedAt, durationMillis = video.durationMillis)
+        val details = withContext(Dispatchers.IO) { videoDetails(video.file.absolutePath, newFile(PHOTO_EXTENSION)) }
+        return MediaRef(
+            video.file.absolutePath, VIDEO_MIME_TYPE, capturedAtEpochMillis = videoStartedAt, durationMillis = video.durationMillis,
+            width = details?.width, height = details?.height, thumbnailUri = details?.thumbnailPath,
+        )
     }
 
     private fun newFile(extension: String): File {
@@ -277,10 +303,76 @@ private class AndroidCameraHandle(private val context: Context) : CameraHandle {
     }
 }
 
+/**
+ * Rewrites the photo at [UPLOAD_MAX_SIDE] pixels on the longer side, with the EXIF rotation baked in
+ * (so the file has no orientation tag left). Returns its new size, or `null` if it was left as it was.
+ */
+private fun shrinkPhoto(file: File): Pair<Int, Int>? = runCatching {
+    val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
+    BitmapFactory.decodeFile(file.absolutePath, bounds)
+    var sample = 1
+    while (max(bounds.outWidth, bounds.outHeight) / (sample * 2) >= UPLOAD_MAX_SIDE) sample *= 2
+    val decoded = BitmapFactory.decodeFile(file.absolutePath, BitmapFactory.Options().apply { inSampleSize = sample }) ?: return@runCatching null
+    val matrix = Matrix()
+    when (ExifInterface(file.absolutePath).getAttributeInt(ExifInterface.TAG_ORIENTATION, ExifInterface.ORIENTATION_NORMAL)) {
+        ExifInterface.ORIENTATION_ROTATE_90 -> matrix.postRotate(90f)
+        ExifInterface.ORIENTATION_ROTATE_180 -> matrix.postRotate(180f)
+        ExifInterface.ORIENTATION_ROTATE_270 -> matrix.postRotate(270f)
+        ExifInterface.ORIENTATION_FLIP_HORIZONTAL -> matrix.postScale(-1f, 1f)
+        ExifInterface.ORIENTATION_FLIP_VERTICAL -> matrix.postScale(1f, -1f)
+        ExifInterface.ORIENTATION_TRANSPOSE -> { matrix.postRotate(90f); matrix.postScale(-1f, 1f) }
+        ExifInterface.ORIENTATION_TRANSVERSE -> { matrix.postRotate(270f); matrix.postScale(-1f, 1f) }
+        else -> Unit
+    }
+    val upright = Bitmap.createBitmap(decoded, 0, 0, decoded.width, decoded.height, matrix, true)
+    val scale = UPLOAD_MAX_SIDE.toFloat() / max(upright.width, upright.height)
+    val final = if (scale < 1f) Bitmap.createScaledBitmap(upright, (upright.width * scale).toInt(), (upright.height * scale).toInt(), true) else upright
+    // Written to a sibling file and swapped in, so a failure never leaves a half-written photo.
+    val temp = File(file.parentFile, file.name + ".tmp")
+    temp.outputStream().use { final.compress(Bitmap.CompressFormat.JPEG, UPLOAD_JPEG_QUALITY, it) }
+    if (!temp.renameTo(file)) { temp.delete(); return@runCatching null }
+    final.width to final.height
+}.getOrNull()
+
+/** Size of a photo as it is shown, with its EXIF rotation applied; `null` if it cannot be read. */
+private fun photoSize(path: String): Pair<Int, Int>? = runCatching {
+    val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
+    BitmapFactory.decodeFile(path, bounds)
+    if (bounds.outWidth <= 0 || bounds.outHeight <= 0) return@runCatching null
+    val turned = when (ExifInterface(path).getAttributeInt(ExifInterface.TAG_ORIENTATION, ExifInterface.ORIENTATION_NORMAL)) {
+        ExifInterface.ORIENTATION_ROTATE_90, ExifInterface.ORIENTATION_ROTATE_270,
+        ExifInterface.ORIENTATION_TRANSPOSE, ExifInterface.ORIENTATION_TRANSVERSE -> true
+        else -> false
+    }
+    if (turned) bounds.outHeight to bounds.outWidth else bounds.outWidth to bounds.outHeight
+}.getOrNull()
+
+private class VideoDetails(val width: Int?, val height: Int?, val thumbnailPath: String?)
+
+/** Size of a video as it is shown, and its first frame saved as a JPEG in [thumbnailFile]; each part is `null` if it cannot be made. */
+private fun videoDetails(path: String, thumbnailFile: File): VideoDetails? = runCatching {
+    val retriever = MediaMetadataRetriever()
+    try {
+        retriever.setDataSource(path)
+        fun number(key: Int) = retriever.extractMetadata(key)?.toIntOrNull()
+        val rawWidth = number(MediaMetadataRetriever.METADATA_KEY_VIDEO_WIDTH)
+        val rawHeight = number(MediaMetadataRetriever.METADATA_KEY_VIDEO_HEIGHT)
+        val turned = number(MediaMetadataRetriever.METADATA_KEY_VIDEO_ROTATION) in setOf(90, 270)
+        val frame = retriever.getFrameAtTime(0, MediaMetadataRetriever.OPTION_CLOSEST_SYNC)
+        val thumbnailPath = frame?.let { bitmap ->
+            thumbnailFile.outputStream().use { bitmap.compress(Bitmap.CompressFormat.JPEG, THUMBNAIL_QUALITY, it) }
+            thumbnailFile.absolutePath
+        }
+        VideoDetails(if (turned) rawHeight else rawWidth, if (turned) rawWidth else rawHeight, thumbnailPath)
+    } finally {
+        retriever.release()
+    }
+}.getOrNull()
+
 @Composable
-internal actual fun rememberCameraHandle(): CameraHandle {
+internal actual fun rememberCameraHandle(frontLens: Boolean): CameraHandle {
     val context = LocalContext.current.applicationContext
-    val handle = remember { AndroidCameraHandle(context) }
+    val handle = remember { AndroidCameraHandle(context, frontLens) }
     DisposableEffect(handle) { onDispose { handle.release() } }
     return handle
 }

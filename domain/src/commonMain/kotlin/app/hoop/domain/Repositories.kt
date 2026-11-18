@@ -61,7 +61,31 @@ interface FeedRepository {
 }
 
 interface PostsRepository {
-    suspend fun publish(draft: PostDraft): DomainResult<PostId>
+    /** [onProgress] reports how much of the work is done, from 0 to 1 (the upload of a photo or video is most of it). */
+    suspend fun publish(draft: PostDraft, onProgress: (Float) -> Unit = {}): DomainResult<PostId>
+}
+
+/**
+ * Posts waiting to be sent, kept on the device so they survive the app being closed or the network being down.
+ * One entry per attempt ([PostDraft.clientId]): adding the same attempt again replaces it.
+ */
+interface PendingPostsRepository {
+    suspend fun add(draft: PostDraft)
+    /** Oldest first. */
+    suspend fun all(): List<PendingPost>
+    suspend fun remove(clientId: String)
+}
+
+/** A post kept on the device, with how long it has been waiting. */
+class PendingPost(val draft: PostDraft, val waitingMinutes: Int)
+
+/**
+ * Port to the device's reverse geocoder: the street of a position. The platform decides how it is found
+ * (and which service sees the coordinates), the server never does it.
+ */
+fun interface AddressResolver {
+    /** Short street name of [position], or `null` if it cannot be found (offline, no result). */
+    suspend fun streetAt(position: GeoPoint): String?
 }
 
 /** Port to the device location: the platform decides how permission is asked and the position read. */

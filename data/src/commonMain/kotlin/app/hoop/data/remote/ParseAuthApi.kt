@@ -2,15 +2,9 @@ package app.hoop.data.remote
 
 import app.hoop.data.remote.dto.*
 import io.ktor.client.HttpClient
-import io.ktor.client.call.body
 import io.ktor.client.request.get
 import io.ktor.client.request.post
 import io.ktor.client.request.setBody
-import io.ktor.client.statement.HttpResponse
-import io.ktor.http.isSuccess
-
-/** Error returned by Parse, with its code. */
-internal class ParseApiException(val code: Int, message: String) : Exception(message)
 
 internal class ParseAuthApi(private val client: HttpClient) {
 
@@ -46,14 +40,4 @@ internal class ParseAuthApi(private val client: HttpClient) {
         client.post(ParseProtocol.PATH_REQUEST_PASSWORD_RESET) { setBody(body) }.ensureSuccess()
     }
 
-    private suspend inline fun <reified T> HttpResponse.parse(): T {
-        ensureSuccess()
-        return body()
-    }
-
-    private suspend fun HttpResponse.ensureSuccess() {
-        if (status.isSuccess()) return
-        val error = runCatching { body<ParseErrorDto>() }.getOrDefault(ParseErrorDto())
-        throw ParseApiException(error.code, error.message)
-    }
 }

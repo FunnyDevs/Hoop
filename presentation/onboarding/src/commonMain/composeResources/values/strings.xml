@@ -106,6 +106,7 @@
     <string name="error_unauthorized">Sessione scaduta. Accedi di nuovo.</string>
     <string name="error_location_permission_denied">Senza il permesso di posizione non posso mostrarti cosa succede intorno a te. Puoi continuare e scegliere la zona dopo.</string>
     <string name="error_location_unavailable">Non riesco a leggere la tua posizione.</string>
+    <string name="error_too_many_requests">Troppe richieste. Riprova tra un minuto.</string>
     <string name="error_network">Connessione assente o server non raggiungibile.</string>
     <string name="error_unknown">Qualcosa è andato storto. Riprova.</string>
 
@@ -124,4 +125,5 @@
     <string name="violation_too_many_hoops">Hai raggiunto il numero massimo di Hoop.</string>
     <string name="violation_home_cannot_be_removed">L'Hoop iniziale non si può eliminare.</string>
     <string name="violation_hoop_not_found">Hoop non trovato.</string>
+    <string name="violation_position_outside_hoop">Sei troppo lontano da questo Hoop per pubblicare qui.</string>
 </resources>

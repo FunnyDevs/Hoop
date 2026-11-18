@@ -130,11 +130,11 @@ internal class FakeHomeStore : HoopsRepository, FeedRepository, PostsRepository 
     )
 
     // ---- PostsRepository ----
-    override suspend fun publish(draft: PostDraft): DomainResult<PostId> {
+    override suspend fun publish(draft: PostDraft, onProgress: (Float) -> Unit): DomainResult<PostId> {
         val list = seeds[draft.hoopId.value] ?: return DomainResult.failure(Violation.HoopNotFound)
         val id = "u${++nextId}"
         val spot = NEW_POST_OFFSETS[list.size % NEW_POST_OFFSETS.size]
-        list.add(0, Seed(id, draft.type, ME_NAME, draft.text?.value.orEmpty(), draft.media?.uri, spot.first, spot.second, 0, mutableListOf()))
+        list.add(0, Seed(id, draft.type, ME_NAME, draft.text.value, draft.media?.uri, spot.first, spot.second, 0, mutableListOf()))
         return DomainResult.success(PostId(id))
     }
 

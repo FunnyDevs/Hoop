@@ -12,6 +12,8 @@ sealed interface DomainError {
     data object LocationPermissionDenied : DomainError
     data object LocationUnavailable : DomainError
     data object Network : DomainError
+    /** The server is answering "too many requests": the user is going too fast. */
+    data object TooManyRequests : DomainError
     data object Unknown : DomainError
 }
 
@@ -33,4 +35,6 @@ enum class Violation {
     TooManyHoops,
     HomeHoopCannotBeRemoved,
     HoopNotFound,
+    /** The user is too far from the Hoop to publish in it. */
+    PositionOutsideHoop,
 }

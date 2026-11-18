@@ -22,6 +22,10 @@ internal object HoopPalette {
     val ButterText = Color(0xFF5B4A1C)
     val Avatar = Color(0xFFA9C7F2)
     val ScrimDark = Color(0xFF141414)
+    /** Behind the live camera and the shot being confirmed. */
+    val CaptureBackdrop = Color(0xFF1F2325)
+    /** The dot next to the clock while a video is being recorded. */
+    val Recording = Color(0xFFE5483A)
     val Shadow = Color(0xFF1E3C2D)
     val MapLand = Color(0xFFEAF2EE)
     val MapWater = Color(0xFFBEDCE8)

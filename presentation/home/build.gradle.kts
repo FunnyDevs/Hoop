@@ -17,6 +17,7 @@ kotlin {
             implementation(libs.lifecycle.viewmodel.compose)
             implementation(libs.kotlinx.coroutines.core)
             implementation(libs.koin.core)
+            implementation(libs.kermit)
             implementation(libs.koin.compose.viewmodel)
         }
         // The live camera: CameraX on Android (AVFoundation on iOS needs no library).

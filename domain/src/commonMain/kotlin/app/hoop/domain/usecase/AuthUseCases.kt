@@ -13,6 +13,10 @@ import app.hoop.domain.identity.Password
 import app.hoop.domain.identity.User
 import app.hoop.domain.identity.Username
 
+class SignOutUseCase(private val auth: AuthRepository) {
+    suspend operator fun invoke() = auth.signOut()
+}
+
 class SignInUseCase(private val auth: AuthRepository) {
     suspend operator fun invoke(identifier: String, password: String): DomainResult<User> =
         LoginIdentifier.create(identifier).flatMap { id ->

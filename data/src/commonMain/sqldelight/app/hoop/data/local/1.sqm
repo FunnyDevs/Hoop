@@ -1,0 +1,2 @@
+-- Version 1 of the database had no time of queuing. Posts already waiting get 0 ("a long time ago").
+ALTER TABLE PendingPost ADD COLUMN queuedAtEpochMillis INTEGER NOT NULL DEFAULT 0;

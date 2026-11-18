@@ -16,6 +16,7 @@ fun DomainError.messageRes(): StringResource = when (this) {
     DomainError.LocationPermissionDenied -> Res.string.error_location_permission_denied
     DomainError.LocationUnavailable -> Res.string.error_location_unavailable
     DomainError.Network -> Res.string.error_network
+    DomainError.TooManyRequests -> Res.string.error_too_many_requests
     DomainError.Unknown -> Res.string.error_unknown
 }
 
@@ -34,4 +35,5 @@ fun Violation.messageRes(): StringResource = when (this) {
     Violation.TooManyHoops -> Res.string.violation_too_many_hoops
     Violation.HomeHoopCannotBeRemoved -> Res.string.violation_home_cannot_be_removed
     Violation.HoopNotFound -> Res.string.violation_hoop_not_found
+    Violation.PositionOutsideHoop -> Res.string.violation_position_outside_hoop
 }

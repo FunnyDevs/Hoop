@@ -58,6 +58,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import app.hoop.designsystem.component.HoopBackHandler
 import app.hoop.designsystem.icon.HoopIcons
 import app.hoop.designsystem.theme.HoopTheme
@@ -89,18 +90,31 @@ private object CameraSpec {
     val confirmBottom = 56.dp
     val discardIcon = 32.dp
     val confirmIcon = 36.dp
-    val permissionGlyph = 32.dp
+    val permissionGlyph = 44.dp
+    val noticeSidePadding = 36.dp
+    val noticeButtonSide = 24.dp
+    val noticeButtonBottom = 56.dp
+    val noticeTitleGap = 28.dp
+    val noticeBodyGap = 12.dp
+    val recordDot = 10.dp
+    val recordingClockDrop = 8.dp
+    val shutterProgressRing = 6.dp
+    const val NOTICE_TOP_FRACTION = 250f / 844f
+    const val NOTICE_GLASS_ALPHA = 0.12f
+    const val NOTICE_BODY_ALPHA = 0.75f
+    const val NOTICE_BODY_LINE = 1.45f
+    const val RECORDING_CLOCK_SIZE = 15
     val minConfirmBottom = 16.dp
     val pillHeight = 34.dp
     val progressHeight = 3.dp
     val audioButton = 36.dp
-    val permissionIcon = 88.dp
+    val permissionIcon = 96.dp
     val permissionButtonHeight = 54.dp
     const val SCRIM_ALPHA = 0.35f
     const val RING_ALPHA = 0.45f
     const val PILL_ALPHA = 0.4f
     const val GLASS_ALPHA = 0.25f
-    const val RECORDING_SCALE = 0.62f
+    const val RECORDING_SCALE = 0.444f
     const val FRAME_MILLIS_PER_NANO = 1_000_000L
     const val SECOND_MILLIS = 1000L
     const val SECONDS_PER_MINUTE = 60L
@@ -124,8 +138,8 @@ private object CameraSpec {
 internal fun CaptureOverlay(capture: CaptureUi, onIntent: (HomeIntent) -> Unit, modifier: Modifier = Modifier) {
     val media = capture.media
     HoopBackHandler(true) { onIntent(if (media == null) HomeIntent.CameraClosed else HomeIntent.CaptureDiscarded) }
-    Box(modifier.fillMaxSize().background(HoopTheme.colors.brand).pointerInput(Unit) { awaitEachGesture { awaitFirstDown() } }) {
-        if (media == null) CameraScreen(onIntent) else ConfirmScreen(media, onIntent)
+    Box(modifier.fillMaxSize().background(HoopTheme.colors.captureBackdrop).pointerInput(Unit) { awaitEachGesture { awaitFirstDown() } }) {
+        if (media == null) CameraScreen(capture.frontLens, onIntent) else ConfirmScreen(media, onIntent)
     }
 }
 
@@ -134,21 +148,31 @@ internal fun CaptureOverlay(capture: CaptureUi, onIntent: (HomeIntent) -> Unit, 
 // ---------------------------------------------------------------------------------------------------------------------
 
 @Composable
-private fun CameraScreen(onIntent: (HomeIntent) -> Unit) {
+private fun CameraScreen(frontLens: Boolean, onIntent: (HomeIntent) -> Unit) {
     val permissions = rememberCameraPermissions()
     // The first time the screen opens, the system asks right away: the camera is the only reason to be here.
     LaunchedEffect(Unit) { if (permissions.access == CameraAccess.CanAsk) permissions.request() }
     if (permissions.access == CameraAccess.Granted) {
-        LiveCamera(onIntent)
+        LiveCamera(frontLens, onIntent)
     } else {
-        PermissionNeeded(permissions, onClose = { onIntent(HomeIntent.CameraClosed) })
+        val blocked = permissions.access == CameraAccess.Blocked
+        FullScreenNotice(
+            icon = HoopIcons.Camera,
+            title = stringResource(Res.string.camera_permission_title),
+            body = stringResource(if (blocked) Res.string.camera_permission_blocked else Res.string.camera_permission_body),
+            action = stringResource(if (blocked) Res.string.camera_permission_settings else Res.string.camera_permission_allow),
+            onClose = { onIntent(HomeIntent.CameraClosed) },
+            onAction = { if (blocked) permissions.openSettings() else permissions.request() },
+        )
     }
 }
 
 @Composable
-private fun LiveCamera(onIntent: (HomeIntent) -> Unit) {
+private fun LiveCamera(frontLens: Boolean, onIntent: (HomeIntent) -> Unit) {
     val colors = HoopTheme.colors
-    val camera = rememberCameraHandle()
+    val camera = rememberCameraHandle(frontLens)
+    // The next time the camera opens (a retake, for example) it opens on the lens the user was using.
+    LaunchedEffect(camera.isFrontLens) { onIntent(HomeIntent.CameraLensChanged(camera.isFrontLens)) }
     val scope = rememberCoroutineScope()
     var busy by remember { mutableStateOf(false) }
     var recording by remember { mutableStateOf(false) }
@@ -183,19 +207,25 @@ private fun LiveCamera(onIntent: (HomeIntent) -> Unit) {
         FocusLayer(camera)
         Shades()
         val top = WindowInsets.statusBars.asPaddingValues().calculateTopPadding() + CameraSpec.topExtra
-        RoundGlass(HoopIcons.Close, stringResource(Res.string.camera_close), { onIntent(HomeIntent.CameraClosed) },
-            Modifier.align(Alignment.TopStart).padding(start = CameraSpec.edge, top = top))
-        Column(Modifier.align(Alignment.TopEnd).padding(end = CameraSpec.edge, top = top), verticalArrangement = Arrangement.spacedBy(CameraSpec.flipGap)) {
-            RoundGlass(
-                if (camera.isFlashOn) HoopIcons.Flash else HoopIcons.FlashOff,
-                stringResource(if (camera.isFlashOn) Res.string.camera_flash_on else Res.string.camera_flash_off),
-                camera::toggleFlash,
-            )
-            RoundGlass(HoopIcons.FlipCamera, stringResource(Res.string.camera_switch), camera::switchLens)
+        // While recording only the clock and the shutter stay: no buttons, no hint.
+        if (!recording) {
+            RoundGlass(HoopIcons.Close, stringResource(Res.string.camera_close), { onIntent(HomeIntent.CameraClosed) },
+                Modifier.align(Alignment.TopStart).padding(start = CameraSpec.edge, top = top))
+            Column(Modifier.align(Alignment.TopEnd).padding(end = CameraSpec.edge, top = top), verticalArrangement = Arrangement.spacedBy(CameraSpec.flipGap)) {
+                RoundGlass(
+                    if (camera.isFlashOn) HoopIcons.Flash else HoopIcons.FlashOff,
+                    stringResource(if (camera.isFlashOn) Res.string.camera_flash_on else Res.string.camera_flash_off),
+                    camera::toggleFlash,
+                )
+                RoundGlass(HoopIcons.FlipCamera, stringResource(Res.string.camera_switch), camera::switchLens)
+            }
         }
         val bottom = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding() + CameraSpec.shutterBottom
         if (recording) {
-            Pill(formatClock(elapsedMillis.toLong()), Modifier.align(Alignment.TopCenter).padding(top = top))
+            Pill(
+                formatClock(elapsedMillis.toLong()), Modifier.align(Alignment.TopCenter).padding(top = top + CameraSpec.recordingClockDrop),
+                dot = colors.recording, fontSize = CameraSpec.RECORDING_CLOCK_SIZE.sp,
+            )
         } else {
             Text(
                 stringResource(Res.string.camera_hint),
@@ -216,6 +246,19 @@ private fun LiveCamera(onIntent: (HomeIntent) -> Unit) {
             onHoldEnd = ::stopRecording,
             modifier = Modifier.align(Alignment.BottomCenter).padding(bottom = bottom),
         )
+        // The preview stays underneath so that "try again" can bring it back.
+        if (camera.isUnavailable) {
+            Box(Modifier.fillMaxSize().background(colors.captureBackdrop)) {
+                FullScreenNotice(
+                    icon = HoopIcons.CameraOff,
+                    title = stringResource(Res.string.camera_unavailable_title),
+                    body = stringResource(Res.string.camera_unavailable_body),
+                    action = stringResource(Res.string.camera_unavailable_retry),
+                    onClose = { onIntent(HomeIntent.CameraClosed) },
+                    onAction = camera::retry,
+                )
+            }
+        }
     }
 }
 
@@ -280,9 +323,10 @@ private fun Shutter(
             val arc = Size(size.width - ring, size.height - ring)
             drawCircle(colors.onScrim.copy(alpha = CameraSpec.RING_ALPHA), radius = (size.minDimension - ring) / 2f, style = Stroke(ring))
             if (recording) {
+                val progressRing = CameraSpec.shutterProgressRing.toPx()
                 drawArc(
                     colors.accent, CameraSpec.RING_START_ANGLE, CameraSpec.FULL_TURN * progress.coerceIn(0f, 1f), useCenter = false,
-                    topLeft = Offset(inset, inset), size = arc, style = Stroke(ring, cap = StrokeCap.Round),
+                    topLeft = Offset(inset, inset), size = arc, style = Stroke(progressRing, cap = StrokeCap.Round),
                 )
             }
         }
@@ -293,36 +337,49 @@ private fun Shutter(
     }
 }
 
+/**
+ * A full-screen message with one button: the camera needs permission, or cannot be opened.
+ * The block of text sits at the same height on all of them, the button at the bottom.
+ */
 @Composable
-private fun PermissionNeeded(permissions: CameraPermissions, onClose: () -> Unit) {
+private fun FullScreenNotice(
+    icon: androidx.compose.ui.graphics.vector.ImageVector, title: String, body: String, action: String,
+    onClose: () -> Unit, onAction: () -> Unit,
+) {
     val colors = HoopTheme.colors
-    val blocked = permissions.access == CameraAccess.Blocked
-    Box(Modifier.fillMaxSize()) {
+    BoxWithConstraints(Modifier.fillMaxSize()) {
         val top = WindowInsets.statusBars.asPaddingValues().calculateTopPadding() + CameraSpec.topExtra
-        RoundGlass(HoopIcons.Close, stringResource(Res.string.camera_close), onClose, Modifier.align(Alignment.TopStart).padding(start = CameraSpec.edge, top = top))
+        RoundGlass(
+            HoopIcons.Close, stringResource(Res.string.camera_close), onClose,
+            Modifier.align(Alignment.TopStart).padding(start = CameraSpec.edge, top = top),
+            fill = colors.onScrim.copy(alpha = CameraSpec.NOTICE_GLASS_ALPHA),
+        )
         Column(
-            Modifier.align(Alignment.Center).padding(horizontal = HoopTheme.spacing.xl),
-            horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(HoopTheme.spacing.md),
+            Modifier.align(Alignment.TopCenter).padding(top = maxHeight * CameraSpec.NOTICE_TOP_FRACTION).padding(horizontal = CameraSpec.noticeSidePadding),
+            horizontalAlignment = Alignment.CenterHorizontally,
         ) {
-            Box(Modifier.size(CameraSpec.permissionIcon).background(colors.onScrim.copy(alpha = CameraSpec.GLASS_ALPHA), HoopTheme.shapes.circle), contentAlignment = Alignment.Center) {
-                Icon(HoopIcons.Camera, null, tint = colors.onScrim, modifier = Modifier.size(CameraSpec.permissionGlyph))
-            }
-            Text(stringResource(Res.string.camera_permission_title), style = HoopTheme.typography.titleLarge, color = colors.onScrim, textAlign = TextAlign.Center)
-            Text(
-                stringResource(if (blocked) Res.string.camera_permission_blocked else Res.string.camera_permission_body),
-                style = HoopTheme.typography.bodyLarge, color = colors.onScrim.copy(alpha = 0.85f), textAlign = TextAlign.Center,
-            )
-            Spacer(Modifier.height(HoopTheme.spacing.sm))
             Box(
-                Modifier.fillMaxWidth().height(CameraSpec.permissionButtonHeight).background(colors.accent, HoopTheme.shapes.circle).clip(HoopTheme.shapes.circle)
-                    .clickable(role = Role.Button) { if (blocked) permissions.openSettings() else permissions.request() },
+                Modifier.size(CameraSpec.permissionIcon).background(colors.onScrim.copy(alpha = CameraSpec.NOTICE_GLASS_ALPHA), HoopTheme.shapes.circle),
                 contentAlignment = Alignment.Center,
             ) {
-                Text(
-                    stringResource(if (blocked) Res.string.camera_permission_settings else Res.string.camera_permission_allow),
-                    style = HoopTheme.typography.titleMedium, color = colors.onBrand,
-                )
+                Icon(icon, null, tint = colors.onScrim, modifier = Modifier.size(CameraSpec.permissionGlyph))
             }
+            Spacer(Modifier.height(CameraSpec.noticeTitleGap))
+            Text(title, style = HoopTheme.typography.headline, color = colors.onScrim, textAlign = TextAlign.Center)
+            Spacer(Modifier.height(CameraSpec.noticeBodyGap))
+            Text(
+                body, color = colors.onScrim.copy(alpha = CameraSpec.NOTICE_BODY_ALPHA), textAlign = TextAlign.Center,
+                style = HoopTheme.typography.bodyLarge.copy(fontWeight = FontWeight.Medium, lineHeight = HoopTheme.typography.bodyLarge.fontSize * CameraSpec.NOTICE_BODY_LINE),
+            )
+        }
+        val bottom = maxOf(CameraSpec.noticeButtonBottom, WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding() + CameraSpec.minConfirmBottom)
+        Box(
+            Modifier.align(Alignment.BottomCenter).padding(horizontal = CameraSpec.noticeButtonSide).padding(bottom = bottom)
+                .fillMaxWidth().height(CameraSpec.permissionButtonHeight).background(colors.accent, HoopTheme.shapes.circle).clip(HoopTheme.shapes.circle)
+                .clickable(role = Role.Button, onClick = onAction),
+            contentAlignment = Alignment.Center,
+        ) {
+            Text(action, style = HoopTheme.typography.bodyLarge.copy(fontWeight = FontWeight.Bold), color = colors.onBrand)
         }
     }
 }
@@ -438,10 +495,13 @@ private fun Shades() {
 }
 
 @Composable
-private fun RoundGlass(icon: androidx.compose.ui.graphics.vector.ImageVector, description: String, onClick: () -> Unit, modifier: Modifier = Modifier) {
+private fun RoundGlass(
+    icon: androidx.compose.ui.graphics.vector.ImageVector, description: String, onClick: () -> Unit, modifier: Modifier = Modifier,
+    fill: Color = HoopTheme.colors.brand.copy(alpha = CameraSpec.PILL_ALPHA - 0.05f),
+) {
     val colors = HoopTheme.colors
     Box(
-        modifier.size(CameraSpec.round).background(colors.brand.copy(alpha = CameraSpec.PILL_ALPHA - 0.05f), HoopTheme.shapes.circle).clip(HoopTheme.shapes.circle)
+        modifier.size(CameraSpec.round).background(fill, HoopTheme.shapes.circle).clip(HoopTheme.shapes.circle)
             .semantics { contentDescription = description }.clickable(role = Role.Button, onClick = onClick),
         contentAlignment = Alignment.Center,
     ) {
@@ -450,14 +510,18 @@ private fun RoundGlass(icon: androidx.compose.ui.graphics.vector.ImageVector, de
 }
 
 @Composable
-private fun Pill(text: String, modifier: Modifier = Modifier, icon: androidx.compose.ui.graphics.vector.ImageVector? = null) {
+private fun Pill(
+    text: String, modifier: Modifier = Modifier, icon: androidx.compose.ui.graphics.vector.ImageVector? = null,
+    dot: Color? = null, fontSize: androidx.compose.ui.unit.TextUnit = androidx.compose.ui.unit.TextUnit.Unspecified,
+) {
     val colors = HoopTheme.colors
     Row(
         modifier.height(CameraSpec.pillHeight).background(colors.brand.copy(alpha = CameraSpec.PILL_ALPHA), HoopTheme.shapes.circle).padding(horizontal = 14.dp),
         verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(7.dp),
     ) {
         if (icon != null) Icon(icon, null, tint = colors.onScrim, modifier = Modifier.size(16.dp))
-        Text(text, style = HoopTheme.typography.labelMedium.copy(fontWeight = FontWeight.Bold), color = colors.onScrim)
+        if (dot != null) Box(Modifier.size(CameraSpec.recordDot).background(dot, HoopTheme.shapes.circle))
+        Text(text, style = HoopTheme.typography.labelMedium.copy(fontWeight = FontWeight.Bold, fontSize = fontSize), color = colors.onScrim)
     }
 }
 

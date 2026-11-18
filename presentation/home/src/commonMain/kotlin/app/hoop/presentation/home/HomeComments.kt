@@ -90,19 +90,9 @@ private object CommentsSpec {
     const val FLING_UP = 1500f
     const val FLING_CLOSE = 2500f
 
-    // Where the sheet starts if the pill's bounds are not known yet.
-    val fallbackPillBottom = 64.dp
-    val fallbackPillHeight = 46.dp
 
-    val background = 0f to 0.35f
-    val content = 0.4f to 0.85f
-    val contentRise = 0.4f to 1f
-    val shadow = 0.2f to 1f
-    val contentOffset = 24.dp
     val shadowElevation = 24.dp
-    val topRadiusClosed = 23.dp
     val topRadiusOpen = 30.dp
-    val bottomRadiusClosed = 23.dp
 
     val handleWidth = 40.dp
     val handleHeight = 5.dp
@@ -125,7 +115,7 @@ private object CommentsSpec {
 internal class CommentsState(private val scope: CoroutineScope) {
     val open = Animatable(0f)
     val position = Animatable(0f)
-    /** Bounds of the "comments" pill of the open post (window coordinates), where the sheet starts; updated by the card. */
+    /** Bounds of the "comments" pill of the open post (window coordinates); kept by the card, no longer used by the sheet. */
     var pillBounds: Rect = Rect.Zero
 
     var postId: String? by mutableStateOf(null)
@@ -194,7 +184,6 @@ internal fun CommentsSheet(
 ) {
     val colors = HoopTheme.colors
     val isQuestion = post.type == PostType.Question
-    val shape = remember(state, isQuestion) { SheetShape(state, isQuestion) }
     Box(
         modifier
             .layout { measurable, constraints ->
@@ -206,43 +195,22 @@ internal fun CommentsSheet(
                 layout(constraints.maxWidth, constraints.maxHeight) { placeable.place(0, top) }
             }
             .graphicsLayer {
-                // The morph from the pill to the sheet happens here, in the draw phase: no composition, no layout.
-                this.shape = shape
+                // The sheet rises from the bottom edge of the screen (and goes back there) with one spring, in the draw phase.
+                // An overshoot is not drawn above the final place: it would leave a gap under the sheet.
+                val top = sheetTop(state.position.value, state.heightPx, isQuestion)
+                translationY = ((state.heightPx - top) * (1f - state.open.value)).coerceAtLeast(0f)
+                this.shape = SheetShape
                 clip = true
-                shadowElevation = CommentsSpec.shadowElevation.toPx() * rampOf(state.open.value, CommentsSpec.shadow)
+                shadowElevation = CommentsSpec.shadowElevation.toPx()
             }
-            .drawBehind { drawRect(colors.surface.copy(alpha = 0.7f + 0.3f * rampOf(state.open.value, CommentsSpec.background))) },
+            .drawBehind { drawRect(colors.surface) },
     ) {
         SheetContent(post, state, isQuestion, replyText, onReplyTextChange, onSend)
     }
 }
 
-/**
- * Outline of the sheet while it opens: it starts as the "comments" pill (its real bounds, measured on the open post) and grows
- * to the sheet's rectangle. Read in the layer, so the animation costs no layout. Coordinates are relative to the sheet's top.
- */
-private class SheetShape(private val state: CommentsState, private val isQuestion: Boolean) : Shape {
-    override fun createOutline(size: Size, layoutDirection: LayoutDirection, density: Density): Outline {
-        // The spring may overshoot a little: only the top uses it, the sides and bottom stay on the screen.
-        val s = state.open.value.coerceAtLeast(0f)
-        val edge = s.coerceIn(0f, 1f)
-        val width = size.width
-        val height = state.heightPx
-        val finalTop = sheetTop(state.position.value, height, isQuestion)
-        val pill = state.pillBounds.takeIf { it.width > 0f } ?: with(density) {
-            Rect(width / 2f, height - CommentsSpec.fallbackPillBottom.toPx() - CommentsSpec.fallbackPillHeight.toPx(), width - 16.dp.toPx(), height - CommentsSpec.fallbackPillBottom.toPx())
-        }
-        val left = pill.left * (1f - edge)
-        val right = width - (width - pill.right) * (1f - edge)
-        val top = pill.top + (finalTop - pill.top) * s - finalTop
-        val bottom = (height - finalTop) - (height - pill.bottom) * (1f - edge)
-        val topRadius = with(density) { (CommentsSpec.topRadiusClosed + (CommentsSpec.topRadiusOpen - CommentsSpec.topRadiusClosed) * edge).toPx() }
-        val bottomRadius = with(density) { (CommentsSpec.bottomRadiusClosed * (1f - edge)).toPx() }
-        return Outline.Rounded(
-            RoundRect(left, top, right, bottom, CornerRadius(topRadius), CornerRadius(topRadius), CornerRadius(bottomRadius), CornerRadius(bottomRadius)),
-        )
-    }
-}
+/** Outline of the sheet (the layer is as big as the sheet): rounded top corners, square bottom. */
+private val SheetShape = RoundedCornerShape(topStart = CommentsSpec.topRadiusOpen, topEnd = CommentsSpec.topRadiusOpen)
 
 @Composable
 private fun SheetContent(
@@ -255,13 +223,7 @@ private fun SheetContent(
 ) {
     val colors = HoopTheme.colors
     val spec = CommentsSpec
-    Column(
-        Modifier.fillMaxSize().graphicsLayer {
-            val s = state.open.value
-            alpha = rampOf(s, spec.content)
-            translationY = spec.contentOffset.toPx() * (1f - rampOf(s, spec.contentRise))
-        },
-    ) {
+    Column(Modifier.fillMaxSize()) {
         // Everything above the list can be dragged to move the sheet between its heights or to close it.
         Column(
             Modifier.fillMaxWidth().draggable(

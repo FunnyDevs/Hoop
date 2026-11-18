@@ -89,7 +89,15 @@ import platform.Foundation.timeIntervalSince1970
 import platform.UIKit.UIApplication
 import platform.UIKit.UIApplicationOpenSettingsURLString
 import platform.UIKit.UIImage
+import platform.UIKit.UIImageJPEGRepresentation
+import platform.UIKit.UIGraphicsBeginImageContextWithOptions
+import platform.UIKit.UIGraphicsEndImageContext
+import platform.UIKit.UIGraphicsGetImageFromCurrentImageContext
+import platform.CoreGraphics.CGRectMake
+import platform.CoreGraphics.CGSizeMake
 import platform.UIKit.UIImagePNGRepresentation
+import platform.CoreGraphics.CGImageGetHeight
+import platform.CoreGraphics.CGImageGetWidth
 import platform.UIKit.UIView
 import platform.darwin.NSObject
 import platform.darwin.dispatch_async
@@ -145,12 +153,14 @@ internal actual fun rememberCameraPermissions(): CameraPermissions {
 // ---------------------------------------------------------------------------------------------------------------------
 
 @OptIn(ExperimentalForeignApi::class)
-private class IosCameraHandle : CameraHandle {
+private class IosCameraHandle(frontLens: Boolean) : CameraHandle {
     override var isReady by mutableStateOf(false)
+        private set
+    override var isUnavailable by mutableStateOf(false)
         private set
     override var isFlashOn by mutableStateOf(false)
         private set
-    override var isFrontLens by mutableStateOf(false)
+    override var isFrontLens by mutableStateOf(frontLens)
         private set
 
     val session = AVCaptureSession()
@@ -180,10 +190,19 @@ private class IosCameraHandle : CameraHandle {
 
     private fun attachVideo() {
         videoInput?.let { session.removeInput(it) }
+        videoInput = null
+        isUnavailable = true
         val position = if (isFrontLens) AVCaptureDevicePositionFront else AVCaptureDevicePositionBack
         val device = AVCaptureDevice.defaultDeviceWithDeviceType(AVCaptureDeviceTypeBuiltInWideAngleCamera, AVMediaTypeVideo, position) ?: return
         val input = AVCaptureDeviceInput.deviceInputWithDevice(device, error = null) ?: return
-        if (session.canAddInput(input)) { session.addInput(input); videoInput = input }
+        if (session.canAddInput(input)) { session.addInput(input); videoInput = input; isUnavailable = false }
+    }
+
+    override fun retry() {
+        session.beginConfiguration()
+        attachVideo()
+        session.commitConfiguration()
+        if (!isUnavailable && !session.running) session.startRunning()
     }
 
     fun start() {
@@ -245,7 +264,10 @@ private class IosCameraHandle : CameraHandle {
             photoDelegate = delegate
             photoOutput.capturePhotoWithSettings(settings, delegate = delegate)
         }
-        return if (saved) MediaRef(path, PHOTO_MIME_TYPE, capturedAtEpochMillis = capturedAt) else null
+        if (!saved) return null
+        // Shrunk right away: what is shown, kept and uploaded is the small version, already upright.
+        val size = shrinkPhoto(path) ?: photoSize(path)
+        return MediaRef(path, PHOTO_MIME_TYPE, capturedAtEpochMillis = capturedAt, width = size?.first, height = size?.second)
     }
 
     override suspend fun startVideo(): Boolean {
@@ -259,8 +281,14 @@ private class IosCameraHandle : CameraHandle {
                 output: AVCaptureFileOutput, didFinishRecordingToOutputFileAtURL: NSURL, fromConnections: List<*>, error: NSError?,
             ) {
                 val duration = nowMillis() - videoStartedAt
+                val details = if (error == null) videoDetails(path, newCapturePath(PHOTO_EXTENSION)) else null
                 result.complete(
-                    if (error == null) MediaRef(path, VIDEO_MIME_TYPE, capturedAtEpochMillis = videoStartedAt, durationMillis = duration) else null,
+                    if (error == null) {
+                        MediaRef(
+                            path, VIDEO_MIME_TYPE, capturedAtEpochMillis = videoStartedAt, durationMillis = duration,
+                            width = details?.width, height = details?.height, thumbnailUri = details?.thumbnailPath,
+                        )
+                    } else null,
                 )
                 setTorch(false)
                 recordingDelegate = null
@@ -289,8 +317,8 @@ private class IosCameraHandle : CameraHandle {
 }
 
 @Composable
-internal actual fun rememberCameraHandle(): CameraHandle {
-    val handle = remember { IosCameraHandle() }
+internal actual fun rememberCameraHandle(frontLens: Boolean): CameraHandle {
+    val handle = remember { IosCameraHandle(frontLens) }
     DisposableEffect(handle) {
         handle.start()
         onDispose { handle.stop() }
@@ -388,3 +416,48 @@ private fun firstFrame(path: String): NSData? {
 private fun NSData.toByteArray(): ByteArray = ByteArray(length.toInt()).also { bytes ->
     if (bytes.isNotEmpty()) bytes.usePinned { memcpy(it.addressOf(0), this.bytes, length) }
 }
+
+/** Size of a photo as it is shown (UIImage already applies the orientation); `null` if it cannot be read. */
+@OptIn(ExperimentalForeignApi::class)
+private fun photoSize(path: String): Pair<Int, Int>? {
+    val image = UIImage.imageWithContentsOfFile(path) ?: return null
+    return image.size.useContents { width.toInt() to height.toInt() }.takeIf { it.first > 0 && it.second > 0 }
+}
+
+/**
+ * Rewrites the photo at [UPLOAD_MAX_SIDE] points on the longer side as an upright JPEG (drawing a UIImage applies
+ * its orientation). Returns its new size, or `null` if it was left as it was.
+ */
+@OptIn(ExperimentalForeignApi::class)
+private fun shrinkPhoto(path: String): Pair<Int, Int>? {
+    val image = UIImage.imageWithContentsOfFile(path) ?: return null
+    val (width, height) = image.size.useContents { width to height }
+    if (width <= 0.0 || height <= 0.0) return null
+    val scale = minOf(1.0, UPLOAD_MAX_SIDE / maxOf(width, height))
+    val targetWidth = (width * scale).toInt().coerceAtLeast(1)
+    val targetHeight = (height * scale).toInt().coerceAtLeast(1)
+    UIGraphicsBeginImageContextWithOptions(CGSizeMake(targetWidth.toDouble(), targetHeight.toDouble()), false, 1.0)
+    image.drawInRect(CGRectMake(0.0, 0.0, targetWidth.toDouble(), targetHeight.toDouble()))
+    val resized = UIGraphicsGetImageFromCurrentImageContext()
+    UIGraphicsEndImageContext()
+    val jpeg = resized?.let { UIImageJPEGRepresentation(it, UPLOAD_JPEG_QUALITY) } ?: return null
+    return if (jpeg.writeToFile(path, atomically = true)) targetWidth to targetHeight else null
+}
+
+private class VideoDetails(val width: Int?, val height: Int?, val thumbnailPath: String?)
+
+/** Size of a video as it is shown and its first frame saved as a JPEG at [thumbnailPath]; each part is `null` if it cannot be made. */
+@OptIn(ExperimentalForeignApi::class)
+private fun videoDetails(path: String, thumbnailPath: String): VideoDetails? {
+    val generator = AVAssetImageGenerator(aSSET = AVURLAsset.URLAssetWithURL(NSURL.fileURLWithPath(path), options = null))
+    // With the preferred transform applied the frame has the orientation the viewer sees.
+    generator.appliesPreferredTrackTransform = true
+    val frame = generator.copyCGImageAtTime(CMTimeMake(0, VIDEO_TIMESCALE), actualTime = null, error = null) ?: return null
+    val jpeg = UIImageJPEGRepresentation(UIImage.imageWithCGImage(frame), THUMBNAIL_QUALITY)
+    val saved = jpeg != null && jpeg.writeToFile(thumbnailPath, atomically = true)
+    return VideoDetails(CGImageGetWidth(frame).toInt(), CGImageGetHeight(frame).toInt(), if (saved) thumbnailPath else null)
+}
+
+private const val THUMBNAIL_QUALITY = 0.8
+private const val UPLOAD_MAX_SIDE = 1600.0
+private const val UPLOAD_JPEG_QUALITY = 0.85
