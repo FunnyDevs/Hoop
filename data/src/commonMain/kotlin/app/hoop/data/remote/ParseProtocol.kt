@@ -20,6 +20,14 @@ internal object ParseProtocol {
     const val FUNCTION_GET_CURRENT_USER = "getCurrentUser"
     const val FUNCTION_CHANGE_PASSWORD = "changeUserPassword"
     const val FUNCTION_SAVE_NEW_POST = "saveNewPost"
+    const val FUNCTION_GET_USER_HOOPS = "getUserHoops"
+    const val FUNCTION_CREATE_HOOP = "createHoop"
+    const val FUNCTION_UPDATE_HOOP = "updateHoop"
+    const val FUNCTION_DELETE_HOOPS = "deleteHoops"
+    const val FUNCTION_SEARCH_POSTS = "searchForPostsByPosition"
+    const val FUNCTION_LOAD_COMMENTS = "loadComments"
+    const val FUNCTION_SAVE_COMMENT = "saveComment"
+    const val FUNCTION_GET_NOTIFICATIONS = "getNotifications"
 
     // Parse error codes
     const val ERROR_INVALID_LOGIN = 101

@@ -1,6 +1,9 @@
 package app.hoop.presentation.home
 
 import androidx.compose.animation.AnimatedVisibility
+import coil3.ImageLoader
+import coil3.compose.setSingletonImageLoaderFactory
+import coil3.network.ktor3.KtorNetworkFetcherFactory
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.spring
@@ -112,6 +115,8 @@ private object HomeSpec {
 @Composable
 fun HomeRoute(onSignInRequested: () -> Unit = {}, viewModel: HomeViewModel = koinViewModel(), config: HomeConfig = koinInject()) {
     val state by viewModel.state.collectAsState()
+    // Pictures of the posts are downloaded with the same HTTP stack as the rest of the app.
+    setSingletonImageLoaderFactory { context -> ImageLoader.Builder(context).components { add(KtorNetworkFetcherFactory()) }.build() }
     HomeScreen(state, config) { intent ->
         // Leaving for the sign-in is the host's job; everything else is the ViewModel's.
         if (intent == HomeIntent.SignInRequested) onSignInRequested() else viewModel.onIntent(intent)
@@ -383,18 +388,18 @@ private fun PostCard(
         kind = post.type.toKind(),
         title = post.text,
         fliesCount = formatCount(flies),
-        repliesCount = formatCount(post.replies.size),
+        repliesCount = formatCount(post.repliesCount),
         authorInitials = initialsOf(post.author.name),
         authorHandle = stringResource(Res.string.author_handle, post.author.name.lowercase()),
         ageLabel = formatAge(post.ageMinutes),
-        streetLabel = stringResource(Res.string.street_distance, post.street, formatDistance(post.distanceMeters)),
+        streetLabel = post.street?.let { stringResource(Res.string.street_distance, it, formatDistance(post.distanceMeters)) } ?: formatDistance(post.distanceMeters),
         fliesLabel = pluralStringResource(Res.plurals.flies_label, flies),
         repliesLabel = repliesPillLabel(post),
         flown = flown,
         onFlyClick = onFly,
         onRepliesClick = effects.onComments,
         questionColor = questionColorOf(post),
-        media = mediaPainter(post.mediaKey),
+        media = mediaPainter(post.imageUrl),
         progress = progress,
         bottomInset = bottomInset,
         sheetProgress = effects.sheetProgress,

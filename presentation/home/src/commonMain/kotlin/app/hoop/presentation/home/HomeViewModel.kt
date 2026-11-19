@@ -11,11 +11,13 @@ import app.hoop.domain.hoop.Hoop
 import app.hoop.domain.hoop.UserHoops
 import app.hoop.domain.post.FeedPost
 import app.hoop.domain.post.MediaRef
+import app.hoop.domain.post.PostId
 import app.hoop.domain.post.PostType
 import app.hoop.presentation.home.camera.isVideo
 import app.hoop.domain.usecase.AddReplyUseCase
 import app.hoop.domain.usecase.GetHoopFeedUseCase
 import app.hoop.domain.usecase.GetNotificationsUseCase
+import app.hoop.domain.usecase.GetRepliesUseCase
 import app.hoop.domain.usecase.GetUserHoopsUseCase
 import app.hoop.domain.usecase.CancelPendingPostUseCase
 import app.hoop.domain.usecase.GetPendingPostsUseCase
@@ -41,6 +43,7 @@ class HomeViewModel(
     private val requestLocation: RequestLocationUseCase,
     private val getUserHoops: GetUserHoopsUseCase,
     private val getFeed: GetHoopFeedUseCase,
+    private val getReplies: GetRepliesUseCase,
     private val addReply: AddReplyUseCase,
     private val getNotifications: GetNotificationsUseCase,
     private val publishPost: PublishPostUseCase,
@@ -69,7 +72,10 @@ class HomeViewModel(
             HomeIntent.NewHoopRequested -> Unit
             is HomeIntent.PostSelected -> _state.update { it.copy(selectedIndex = intent.index.coerceIn(0, (it.posts.size - 1).coerceAtLeast(0))) }
             // The carousel keeps its position until the card is completely open (see PostSelected).
-            is HomeIntent.PostOpened -> _state.update { it.copy(openPostId = intent.id, replyText = "") }
+            is HomeIntent.PostOpened -> {
+                _state.update { it.copy(openPostId = intent.id, replyText = "") }
+                loadReplies(intent.id)
+            }
             is HomeIntent.FlyToggled -> _state.update { st ->
                 st.copy(flownPostIds = if (intent.id in st.flownPostIds) st.flownPostIds - intent.id else st.flownPostIds + intent.id)
             }
@@ -167,6 +173,16 @@ class HomeViewModel(
     private fun selectHoop(id: String) {
         _state.update { it.copy(activeHoopId = id, selectedIndex = 0, openPostId = null) }
         publishState(selectedIndex = 0)
+    }
+
+    /** The feed only counts the replies of a post: they are read when the post opens. */
+    private fun loadReplies(postId: String) {
+        viewModelScope.launch {
+            getReplies(PostId(postId)).getOrNull()?.let { loaded ->
+                feeds = feeds.mapValues { (_, list) -> list.map { if (it.id.value == postId) it.withReplies(loaded) else it } }
+                publishState()
+            }
+        }
     }
 
     private fun sendReply() {
@@ -329,11 +345,15 @@ class HomeViewModel(
 
     private fun openNotification(id: String) {
         val notification = _state.value.notifications.firstOrNull { it.id == id } ?: return
-        _state.update { it.copy(activeHoopId = notification.hoopId.value, notificationsOpen = false) }
+        // Posts do not say which Hoop they belong to: it is the feed that holds the post.
+        val hoopId = feeds.entries.firstOrNull { (_, list) -> list.any { it.id == notification.postId } }?.key
+        if (hoopId == null) return _state.update { it.copy(notificationsOpen = false) }
+        _state.update { it.copy(activeHoopId = hoopId, notificationsOpen = false) }
         publishState(selectedIndex = 0)
         _state.update { s ->
             s.copy(openPostId = notification.postId.value, selectedIndex = s.posts.indexOfFirst { it.id == notification.postId }.coerceAtLeast(0))
         }
+        loadReplies(notification.postId.value)
     }
 
     private fun hoopId(id: String?) = app.hoop.domain.hoop.HoopId(id.orEmpty())

@@ -18,6 +18,9 @@ kotlin {
             implementation(libs.kotlinx.coroutines.core)
             implementation(libs.koin.core)
             implementation(libs.kermit)
+            // Photos and stills of the posts come from the server: Coil downloads, caches and decodes them.
+            implementation(libs.coil.compose)
+            implementation(libs.coil.network.ktor3)
             implementation(libs.koin.compose.viewmodel)
         }
         // The live camera: CameraX on Android (AVFoundation on iOS needs no library).

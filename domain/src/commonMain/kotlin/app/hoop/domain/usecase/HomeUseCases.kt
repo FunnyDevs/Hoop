@@ -23,6 +23,10 @@ class GetHoopFeedUseCase(private val feed: FeedRepository) {
     suspend operator fun invoke(hoop: Hoop, position: GeoPoint): DomainResult<List<FeedPost>> = feed.getFeed(hoop, position)
 }
 
+class GetRepliesUseCase(private val feed: FeedRepository) {
+    suspend operator fun invoke(postId: PostId): DomainResult<List<Reply>> = feed.getReplies(postId)
+}
+
 class AddReplyUseCase(private val feed: FeedRepository) {
     suspend operator fun invoke(postId: PostId, text: String): DomainResult<Reply> {
         val trimmed = text.trim()

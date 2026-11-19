@@ -19,7 +19,8 @@ data class Reply(
 
 /**
  * Read model of a post shown in a feed: the post plus what the UI needs around it.
- * [mediaKey] identifies the photo or video (a URL once the real backend is wired).
+ * [imageUrl] is the picture to show: the photo, or the still of a video (`null` for questions).
+ * The replies are loaded when the post is opened: until then only [repliesCount] is known.
  */
 class FeedPost(
     val id: PostId,
@@ -27,17 +28,23 @@ class FeedPost(
     val type: PostType,
     val author: Author,
     val text: String,
-    val mediaKey: String?,
+    val imageUrl: String?,
     val location: GeoPoint,
     val distanceMeters: Int,
     val ageMinutes: Int,
-    val replies: List<Reply>,
-    /** Street where the post was published; every post has one (questions, photos, videos). */
-    val street: String,
+    val repliesCount: Int,
+    /** Street where the post was published; `null` if the device could not find it. */
+    val street: String?,
     /** How many people said "Ci volo" (they are going there). */
     val fliesCount: Int,
+    val replies: List<Reply> = emptyList(),
 ) {
-    fun withReply(reply: Reply) = FeedPost(id, hoopId, type, author, text, mediaKey, location, distanceMeters, ageMinutes, replies + reply, street, fliesCount)
+    fun withReplies(loaded: List<Reply>) = copy(repliesCount = loaded.size, replies = loaded)
+
+    fun withReply(reply: Reply) = copy(repliesCount = repliesCount + 1, replies = replies + reply)
+
+    private fun copy(repliesCount: Int, replies: List<Reply>) =
+        FeedPost(id, hoopId, type, author, text, imageUrl, location, distanceMeters, ageMinutes, repliesCount, street, fliesCount, replies)
 
     override fun equals(other: Any?): Boolean = other is FeedPost && other.id == id
     override fun hashCode(): Int = id.hashCode()

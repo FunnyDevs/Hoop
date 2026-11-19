@@ -8,10 +8,12 @@ import app.hoop.data.media.MediaFileReader
 import app.hoop.data.remote.ParsePostsApi
 import app.hoop.data.remote.SessionHolder
 import app.hoop.data.fake.FakeAuthRepository
-import app.hoop.data.fake.FakeHomeStore
 import app.hoop.data.remote.ParseAuthApi
 import app.hoop.data.remote.createParseHttpClient
 import app.hoop.data.repository.ParseAuthRepository
+import app.hoop.data.remote.ParseHomeApi
+import app.hoop.data.repository.ParseFeedRepository
+import app.hoop.data.repository.ParseHoopsRepository
 import app.hoop.data.repository.ParsePostsRepository
 import app.hoop.data.session.InMemorySessionTokenStore
 import app.hoop.data.session.SessionTokenStore
@@ -20,12 +22,12 @@ import app.hoop.domain.FeedRepository
 import app.hoop.domain.HoopsRepository
 import app.hoop.domain.PendingPostsRepository
 import app.hoop.domain.PostsRepository
-import org.koin.dsl.binds
 import org.koin.dsl.module
 
 /**
  * Binds the domain interfaces to their implementations.
- * If the server is not configured it uses the fake repository, so the app stays testable.
+ * Without a configured server only sign-in has a fake (so the app opens); Hoops, feeds and posts need the server
+ * and fail with a network error.
  */
 fun dataModule(config: ParseConfig) = module {
     // Secure storage comes from the platform module; without one the session lasts until the app closes.
@@ -34,15 +36,14 @@ fun dataModule(config: ParseConfig) = module {
     single<AuthRepository> {
         if (config.isConfigured) ParseAuthRepository(ParseAuthApi(get()), get()) else FakeAuthRepository(getOrNull<SessionTokenStore>() ?: InMemorySessionTokenStore())
     }
-    // Hoops and feeds: sample content in memory until the server functions are wired.
-    single { FakeHomeStore() } binds arrayOf(HoopsRepository::class, FeedRepository::class)
+    // Hoops, feeds and posts always come from the server: there is no sample content.
+    single { ParseHomeApi(get()) }
+    single<HoopsRepository> { ParseHoopsRepository(get()) }
+    single<FeedRepository> { ParseFeedRepository(get()) }
     // Posts waiting to be sent live in the local database when the platform provides one.
     single<PendingPostsRepository> {
         getOrNull<SqlDriverFactory>()?.let { SqlPendingPostsRepository(it.create()) } ?: InMemoryPendingPostsRepository()
     }
-    // Posts: published on the server when it is configured (reading local files needs the platform [MediaFileReader]).
-    single<PostsRepository> {
-        val reader = getOrNull<MediaFileReader>()
-        if (config.isConfigured && reader != null) ParsePostsRepository(ParsePostsApi(get()), reader) else get<FakeHomeStore>()
-    }
+    // Posts are published on the server (reading local files needs the platform [MediaFileReader]).
+    single<PostsRepository> { ParsePostsRepository(ParsePostsApi(get()), get<MediaFileReader>()) }
 }

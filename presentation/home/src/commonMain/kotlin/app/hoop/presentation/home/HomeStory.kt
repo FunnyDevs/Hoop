@@ -147,7 +147,7 @@ internal fun PostStory(
     var immersionSign by remember { mutableFloatStateOf(1f) }
     val immersed by remember { derivedStateOf { immersion.value > 0f } }
     val shownPost = posts[pos.value.roundToInt().coerceIn(0, lastIndex)]
-    val shownMedia = if (shownPost.type == PostType.Question) null else mediaPainter(shownPost.mediaKey)
+    val shownMedia = if (shownPost.type == PostType.Question) null else mediaPainter(shownPost.imageUrl)
     val horizontalMedia = shownMedia?.intrinsicSize?.let { it.isSpecified && it.height > 0f && it.width > it.height } == true
     val wantImmersion = turn != 0 && horizontalMedia && progress.value >= StorySpec.OPEN && !holding
     LaunchedEffect(turn) { if (turn != 0) immersionSign = turn.toFloat() }

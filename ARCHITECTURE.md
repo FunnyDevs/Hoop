@@ -14,7 +14,7 @@ composeApp ──► presentation:onboarding ─┐
 | Module | Contents | May depend on |
 |---|---|---|
 | `domain` | Entities, Value Objects, aggregates, domain services, repository interfaces, use cases | only Kotlin and coroutines |
-| `data` | Repository implementations (Parse via Ktor), DTOs, mappers, technical errors → `DomainError`, fake repositories | `domain` |
+| `data` | Repository implementations (Parse via Ktor), DTOs, mappers, technical errors → `DomainError`, the sign-in fake | `domain` |
 | `core:designsystem` | Tokens, theme, fonts, reusable components with no text and no business logic | nothing |
 | `presentation:onboarding` | Welcome, sign-in, sign-up and recovery screens, ViewModels, Intent/Effect contracts, localized strings, error → text mapping | `domain`, `core:designsystem` |
 | `presentation:home` | Home: map with Hoop areas and pins, Hoop chips, post carousel, full-screen card with replies, ask bar and composer, notifications | `domain`, `core:designsystem` |
@@ -80,7 +80,7 @@ Photos and videos are only taken live, with the camera of the app, never picked 
 
 ## Publishing posts
 
-`PublishPostUseCase` builds a `PostDraft` (type rules, live media, current position) and hands it to `PostsRepository`. `ParsePostsRepository` (data) uploads the photo or video with `POST /files/{name}` and then calls the Cloud Function `saveNewPost` (`type` Q/P/V, position, `hoopId` only for extra Hoops, the uploaded file as a Parse File reference, `cuuid`). The bytes of the camera file are read through the `MediaFileReader` port, implemented per platform in `composeApp` (Android `File`, iOS `NSData`). Server refusals map to domain errors: 5003 `PostTypeNotAllowedInHoop`, 5004 `PositionOutsideHoop`, 5005 `HoopNotFound`. Without server configuration (or without a reader) the fake store is used.
+`PublishPostUseCase` builds a `PostDraft` (type rules, live media, current position) and hands it to `PostsRepository`. `ParsePostsRepository` (data) uploads the photo or video with `POST /files/{name}` and then calls the Cloud Function `saveNewPost` (`type` Q/P/V, position, `hoopId` only for extra Hoops, the uploaded file as a Parse File reference, `cuuid`). The bytes of the camera file are read through the `MediaFileReader` port, implemented per platform in `composeApp` (Android `File`, iOS `NSData`). Server refusals map to domain errors: 5003 `PostTypeNotAllowedInHoop`, 5004 `PositionOutsideHoop`, 5005 `HoopNotFound`.
 
 The street of a post is found on the device through the `AddressResolver` port (Android `Geocoder`, iOS `CLGeocoder`) and sent as the optional `address`; the server never geocodes. The lookup is best effort and bounded (`PostPolicy.ADDRESS_LOOKUP_TIMEOUT_MILLIS`): without a street the post is published all the same. The address is capped at `PostPolicy.ADDRESS_MAX_LENGTH`.
 
@@ -95,3 +95,14 @@ The queue lives in a local SQLite database (SQLDelight 2.0.2, schema in `data/sr
 ### Publishing feedback in the home
 
 The composer closes as soon as the user taps publish. A card at the top of the home (`HomePublish.kt`) follows the post: upload progress with an X to cancel (`PostsRepository.publish(draft, onProgress)`), the reason and a button when it failed (too far, too many requests, generic), or the waiting posts when there is no connection. Tapping the queue card opens the sheet "In attesa di rete", where each waiting post can be cancelled. When the session expired the posts are kept too and the card asks to sign in again (`HomeRoute(onSignInRequested)`: the host signs out and goes to the welcome screen). Any change to the local database schema needs a numbered migration (`data/src/commonMain/sqldelight/.../N.sqm`).
+
+## Hoops, feeds and comments (real data)
+
+There is no sample content: Hoops, feeds, comments and notifications come from the Parse server (`ParseHoopsRepository`, `ParseFeedRepository`, both on `ParseHomeApi`). Without a configured server only sign-in has a fake, and the home stays empty (network error).
+
+- **Hoops:** `getUserHoops` gives Home (no centre: it follows the device, only its radius is stored) and the extra Hoops. Every change (`createHoop`, `updateHoop`, `deleteHoops`) is followed by a new read, so the aggregate always matches the server.
+- **Feed:** one call per Hoop, `searchForPostsByPosition` with the `hoopId` of the Hoop and the current position. Posts carry no Hoop pointer: a post is a location, and the feed of a Hoop is computed by position and radius. Age comes from `createdAt`, distance is measured from the Hoop (the user for Home, the centre for an extra Hoop), the street is the optional `address`, "Ci volo" is `likesCount`. The picture is the photo, or the still of a video (`thumbnailUrl`).
+- **Dates:** a Cloud Function returns a date as `{"__type":"Date","iso":"..."}`, read by `ParseDateAsIso`.
+- **Comments:** the feed only has `commentsCount`; the replies are read with `loadComments` when a post opens (oldest first) and sent with `saveComment` (new `cuuid` each time).
+- **Notifications:** only `COMMENT` rows are shown, grouped by post; likes and new posts nearby have no entry yet. Opening one selects the Hoop whose loaded feed holds the post.
+- **Images:** Coil 3 (`coil-compose`, `coil-network-ktor3`) downloads and caches the pictures in `presentation:home`; local camera files still go through `rememberMediaBitmap`.

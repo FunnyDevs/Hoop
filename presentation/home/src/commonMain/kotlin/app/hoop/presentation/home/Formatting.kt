@@ -1,15 +1,12 @@
 package app.hoop.presentation.home
 
 import androidx.compose.runtime.Composable
-import androidx.compose.ui.graphics.painter.BitmapPainter
 import androidx.compose.ui.graphics.painter.Painter
-import app.hoop.presentation.home.camera.isLocalMedia
-import app.hoop.presentation.home.camera.rememberMediaBitmap
+import coil3.compose.rememberAsyncImagePainter
 import app.hoop.designsystem.component.HoopPostKind
 import app.hoop.domain.post.FeedPost
 import app.hoop.domain.post.PostType
 import app.hoop.presentation.home.resources.*
-import org.jetbrains.compose.resources.painterResource
 import org.jetbrains.compose.resources.pluralStringResource
 import org.jetbrains.compose.resources.stringResource
 import kotlin.math.roundToInt
@@ -44,17 +41,9 @@ internal fun PostType.toKind(): HoopPostKind = when (this) {
     PostType.Video -> HoopPostKind.Video
 }
 
+/** The picture of a post, downloaded and kept by Coil; `null` for a post without one. */
 @Composable
-internal fun mediaPainter(key: String?): Painter? {
-    // A shot taken with the camera is a local file (a video shows its first frame); the rest are the sample photos.
-    val local = rememberMediaBitmap(key.takeIf { isLocalMedia(it) })
-    return when (key) {
-        SampleMedia.SUNSET -> painterResource(Res.drawable.sample_sunset)
-        SampleMedia.CONCERT -> painterResource(Res.drawable.sample_concert)
-        SampleMedia.MARKET -> painterResource(Res.drawable.sample_market)
-        else -> local?.let { BitmapPainter(it) }
-    }
-}
+internal fun mediaPainter(url: String?): Painter? = url?.let { rememberAsyncImagePainter(it) }
 
 @Composable
 internal fun tagLabel(type: PostType): String = stringResource(
@@ -67,11 +56,11 @@ internal fun tagLabel(type: PostType): String = stringResource(
 
 @Composable
 internal fun repliesLabel(post: FeedPost): String =
-    if (post.type == PostType.Question) pluralStringResource(Res.plurals.replies_count, post.replies.size, post.replies.size)
-    else post.replies.size.toString()
+    if (post.type == PostType.Question) pluralStringResource(Res.plurals.replies_count, post.repliesCount, post.repliesCount)
+    else post.repliesCount.toString()
 
 @Composable
-internal fun repliesHeading(post: FeedPost): String = pluralStringResource(Res.plurals.comments_count, post.replies.size, post.replies.size)
+internal fun repliesHeading(post: FeedPost): String = pluralStringResource(Res.plurals.comments_count, post.repliesCount, post.repliesCount)
 
 internal fun initialsOf(name: String): String = name.take(2).uppercase()
 
@@ -95,4 +84,4 @@ internal fun questionColorOf(post: FeedPost): androidx.compose.ui.graphics.Color
 
 /** Label of the comments pill: the design calls replies to a question "comments" too. */
 @Composable
-internal fun repliesPillLabel(post: FeedPost): String = pluralStringResource(Res.plurals.comments_label, post.replies.size)
+internal fun repliesPillLabel(post: FeedPost): String = pluralStringResource(Res.plurals.comments_label, post.repliesCount)

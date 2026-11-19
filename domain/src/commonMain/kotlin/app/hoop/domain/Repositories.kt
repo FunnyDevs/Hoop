@@ -56,6 +56,8 @@ interface HoopsRepository {
 interface FeedRepository {
     /** Posts of [hoop] around [position] (the current position, for the initial Hoop), newest first. */
     suspend fun getFeed(hoop: Hoop, position: GeoPoint): DomainResult<List<FeedPost>>
+    /** The replies of a post, oldest first. */
+    suspend fun getReplies(postId: PostId): DomainResult<List<Reply>>
     suspend fun addReply(postId: PostId, text: String): DomainResult<Reply>
     suspend fun getNotifications(): DomainResult<List<AppNotification>>
 }
