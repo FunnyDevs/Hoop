@@ -27,6 +27,10 @@ internal object HoopPalette {
     /** The dot next to the clock while a video is being recorded. */
     val Recording = Color(0xFFE5483A)
     val Shadow = Color(0xFF1E3C2D)
+    /** Placeholder cards of an empty Hoop: dashed edge, drawn shapes and the hint under the title. */
+    val GhostEdge = Color(0xFFAEBBB4)
+    val GhostShape = Color(0xFFDDE5E0)
+    val GhostHint = Color(0xFF5B6A63)
     val MapLand = Color(0xFFEAF2EE)
     val MapWater = Color(0xFFBEDCE8)
     val MapPark = Color(0xFFCDE5D2)

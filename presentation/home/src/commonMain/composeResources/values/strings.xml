@@ -14,6 +14,8 @@
     <string name="distance_kilometers">%1$s&#160;km</string>
 
     <!-- Cards -->
+    <string name="empty_hoop_title">Ancora niente qui</string>
+    <string name="empty_hoop_hint">Sii il primo a pubblicare</string>
     <string name="glyph_question">?</string>
     <string name="tag_question">Domanda</string>
     <string name="tag_photo">Foto</string>

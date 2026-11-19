@@ -27,6 +27,8 @@ internal object ParseProtocol {
     const val FUNCTION_SEARCH_POSTS = "searchForPostsByPosition"
     const val FUNCTION_LOAD_COMMENTS = "loadComments"
     const val FUNCTION_SAVE_COMMENT = "saveComment"
+    const val FUNCTION_TOGGLE_LIKE = "toggleLike"
+    const val FUNCTION_TOGGLE_COMMENT_LIKE = "toggleCommentLike"
     const val FUNCTION_GET_NOTIFICATIONS = "getNotifications"
 
     // Parse error codes

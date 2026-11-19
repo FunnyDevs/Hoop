@@ -109,6 +109,7 @@ private const val CAPTURES_DIR = "captures"
 private const val MILLIS_PER_SECOND = 1000.0
 private const val PROGRESS_POLL_MILLIS = 40L
 private const val VIDEO_TIMESCALE = 600
+private const val SEEK_WAIT_TRIES = 50
 private const val PHOTO_EXTENSION = ".jpg"
 
 private fun nowMillis(): Long = (NSDate().timeIntervalSince1970 * MILLIS_PER_SECOND).toLong()
@@ -350,7 +351,7 @@ internal actual fun LiveCameraPreview(handle: CameraHandle, modifier: Modifier) 
 @OptIn(ExperimentalForeignApi::class)
 @Composable
 internal actual fun LoopingVideo(uri: String, muted: Boolean, seek: SeekRequest?, onProgress: (Float) -> Unit, modifier: Modifier) {
-    val player = remember(uri) { AVPlayer(playerItem = AVPlayerItem(uRL = NSURL.fileURLWithPath(uri))) }
+    val player = remember(uri) { AVPlayer(playerItem = AVPlayerItem(uRL = (if (uri.startsWith("http")) NSURL.URLWithString(uri) else NSURL.fileURLWithPath(uri)) ?: NSURL.fileURLWithPath(uri))) }
     val layer = remember(player) { AVPlayerLayer.playerLayerWithPlayer(player).also { it.videoGravity = AVLayerVideoGravityResizeAspectFill } }
     player.muted = muted
     DisposableEffect(player) {
@@ -366,7 +367,14 @@ internal actual fun LoopingVideo(uri: String, muted: Boolean, seek: SeekRequest?
     }
     LaunchedEffect(seek) {
         val request = seek ?: return@LaunchedEffect
-        val total = player.currentItem?.duration?.let { CMTimeGetSeconds(it) } ?: return@LaunchedEffect
+        // The length is only known once the video is ready: wait a little for it.
+        fun length() = player.currentItem?.duration?.let { CMTimeGetSeconds(it) } ?: Double.NaN
+        var total = length()
+        var tries = 0
+        while ((total.isNaN() || total <= 0.0) && tries++ < SEEK_WAIT_TRIES) {
+            delay(PROGRESS_POLL_MILLIS)
+            total = length()
+        }
         if (total > 0.0 && !total.isNaN()) player.seekToTime(CMTimeMakeWithSeconds(total * request.fraction.coerceIn(0f, 1f), VIDEO_TIMESCALE))
     }
     LaunchedEffect(player) {

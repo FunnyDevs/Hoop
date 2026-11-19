@@ -12,6 +12,7 @@ import app.hoop.domain.hoop.HoopId
 import app.hoop.domain.hoop.UserHoops
 import app.hoop.domain.identity.AppNotification
 import app.hoop.domain.post.FeedPost
+import app.hoop.domain.post.FlyState
 import app.hoop.domain.post.PostId
 import app.hoop.domain.post.Reply
 
@@ -25,6 +26,14 @@ class GetHoopFeedUseCase(private val feed: FeedRepository) {
 
 class GetRepliesUseCase(private val feed: FeedRepository) {
     suspend operator fun invoke(postId: PostId): DomainResult<List<Reply>> = feed.getReplies(postId)
+}
+
+class SetFlyUseCase(private val feed: FeedRepository) {
+    suspend operator fun invoke(postId: PostId, flown: Boolean): DomainResult<FlyState> = feed.setFly(postId, flown)
+}
+
+class SetReplyFlyUseCase(private val feed: FeedRepository) {
+    suspend operator fun invoke(replyId: String, flown: Boolean): DomainResult<FlyState> = feed.setReplyFly(replyId, flown)
 }
 
 class AddReplyUseCase(private val feed: FeedRepository) {

@@ -74,6 +74,10 @@ import app.hoop.domain.identity.NotificationKind
 import app.hoop.domain.post.FeedPost
 import androidx.compose.ui.platform.LocalFocusManager
 import app.hoop.presentation.home.camera.CaptureOverlay
+import app.hoop.presentation.home.camera.LoopingVideo
+import app.hoop.presentation.home.camera.SeekRequest
+import app.hoop.domain.post.PostType
+import androidx.compose.runtime.derivedStateOf
 import app.hoop.presentation.home.resources.*
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.first
@@ -84,7 +88,7 @@ import org.koin.compose.viewmodel.koinViewModel
 import kotlin.math.abs
 
 /** Measures of the home, from the "Home" boards of the design (reference screen 390 x 844). */
-private object HomeSpec {
+internal object HomeSpec {
     val headerGap = 10.dp
     val headerHeight = 44.dp
     val chipsGap = 14.dp
@@ -133,6 +137,7 @@ fun HomeScreen(state: HomeUiState, config: HomeConfig, onIntent: (HomeIntent) ->
     val infoTop = chipsTop + HomeSpec.chipsHeight + HomeSpec.infoGap
     val cardsBottom = navBottom + HomeSpec.cardsBottom
     val cardBounds = remember { mutableStateMapOf<String, Rect>() }
+    val videoPositions = remember { mutableMapOf<String, Float>() }
     val active = state.activeHoop
     val scope = rememberCoroutineScope()
     val storyProgress = remember { Animatable(0f) }
@@ -232,6 +237,16 @@ fun HomeScreen(state: HomeUiState, config: HomeConfig, onIntent: (HomeIntent) ->
                 }
             }
             val openDragPx = with(LocalDensity.current) { StoryDragRange.toPx() }
+            // The video that plays is the one of the first card not cut off on the left; once that one is scrolled
+            // away a little, the next card takes over (and plays if it is a video too). Nothing plays behind an open card or the camera.
+            val playingId by remember(state.posts, state.openPostId, state.capture) {
+                derivedStateOf {
+                    if (state.openPostId != null || state.capture != null) return@derivedStateOf null
+                    val layout = listState.layoutInfo
+                    val leader = layout.visibleItemsInfo.firstOrNull { it.offset >= layout.viewportStartOffset }
+                    state.posts.getOrNull(leader?.index ?: -1)?.takeIf { it.type == PostType.Video && it.videoUrl != null }?.id?.value
+                }
+            }
             LazyRow(
                 state = listState,
                 modifier = Modifier.align(Alignment.BottomStart).padding(bottom = cardsBottom).height(HoopPostCardDefaults.CarouselHeight).fillMaxWidth(),
@@ -277,12 +292,27 @@ fun HomeScreen(state: HomeUiState, config: HomeConfig, onIntent: (HomeIntent) ->
                                 )
                             }
                             .clickable { onIntent(HomeIntent.PostOpened(post.id.value)) },
-                    ) { PostCard(post, progress = 0f, flown = post.id.value in state.flownPostIds, bottomInset = navBottom, onFly = { onIntent(HomeIntent.FlyToggled(post.id.value)) }) }
+                    ) {
+                        PostCard(
+                            post, progress = StillCard, bottomInset = navBottom, onFly = { onIntent(HomeIntent.FlyToggled(post.id.value)) },
+                            playVideo = post.id.value == playingId, videoPositions = videoPositions,
+                        )
+                    }
                 }
             }
             HoopPageDots(
                 state.posts.size, state.selectedIndex,
                 Modifier.align(Alignment.BottomStart).padding(start = HomeSpec.dotsStart, bottom = navBottom + HomeSpec.dotsBottom),
+            )
+        }
+
+        // A Hoop without posts shows placeholder cards; tapping the first one opens the composer like the "+".
+        if (state.posts.isEmpty() && active != null) {
+            val accent = colors.hoopAccents[state.hoops.indexOfFirst { it.id == active.id }.coerceAtLeast(0) % colors.hoopAccents.size]
+            EmptyHoopCards(
+                accent = accent,
+                onPublish = { if (!state.askBarOpen && state.composer == null) onIntent(HomeIntent.AskBarToggled) },
+                modifier = Modifier.align(Alignment.BottomStart).padding(bottom = cardsBottom).height(HoopPostCardDefaults.CarouselHeight).fillMaxWidth(),
             )
         }
 
@@ -343,10 +373,11 @@ fun HomeScreen(state: HomeUiState, config: HomeConfig, onIntent: (HomeIntent) ->
                 replyText = state.replyText,
                 onReplyTextChange = { onIntent(HomeIntent.ReplyTextChanged(it)) },
                 onSend = { onIntent(HomeIntent.ReplySent) },
+                onReplyFly = { postId, replyId -> onIntent(HomeIntent.ReplyFlyToggled(postId, replyId)) },
                 onClosed = { dragOpening = false; onIntent(HomeIntent.PostClosed) },
                 onPageChanged = { onIntent(HomeIntent.PostOpened(it)) },
                 progress = storyProgress, autoExpand = !dragOpening, holding = fingerDown,
-            ) { shown, progress, effects -> PostCard(shown, progress, shown.id.value in state.flownPostIds, navBottom, { onIntent(HomeIntent.FlyToggled(shown.id.value)) }, effects) }
+            ) { shown, progress, effects -> PostCard(shown, progress, navBottom, { onIntent(HomeIntent.FlyToggled(shown.id.value)) }, effects, videoPositions = videoPositions) }
         }
 
         // ---- Toast ----
@@ -379,11 +410,15 @@ private fun centeredBounds(widthPx: Float, heightPx: Float, cardWidthPx: Float, 
 
 @Composable
 private fun PostCard(
-    post: FeedPost, progress: Float, flown: Boolean, bottomInset: Dp, onFly: () -> Unit,
+    post: FeedPost, progress: () -> Float, bottomInset: Dp, onFly: () -> Unit,
     effects: PostCardEffects = PostCardEffects.None,
+    playVideo: Boolean = false,
+    /** Where each video was last seen (0..1), so that the same video goes on from there when a card opens or closes. */
+    videoPositions: MutableMap<String, Float> = remember { mutableMapOf() },
 ) {
     val colors = HoopTheme.colors
-    val flies = post.fliesCount + if (flown) 1 else 0
+    val flies = post.fliesCount
+    val flown = post.flownByMe
     HoopPostCard(
         kind = post.type.toKind(),
         title = post.text,
@@ -400,6 +435,14 @@ private fun PostCard(
         onRepliesClick = effects.onComments,
         questionColor = questionColorOf(post),
         media = mediaPainter(post.imageUrl),
+        // Muted and in a loop, on top of the still, only while this card is the one playing.
+        video = if ((playVideo || effects.playVideo) && post.videoUrl != null) {
+            {
+                val url = post.videoUrl!!
+                val resumeAt = remember(url) { videoPositions[url]?.let { SeekRequest(it) } }
+                LoopingVideo(url, muted = true, seek = resumeAt, onProgress = { videoPositions[url] = it }, modifier = Modifier.fillMaxSize())
+            }
+        } else null,
         progress = progress,
         bottomInset = bottomInset,
         sheetProgress = effects.sheetProgress,
@@ -436,3 +479,6 @@ private fun NotificationsPopover(items: List<AppNotification>, onClick: (String)
         }
     }
 }
+
+/** Progress of a card that stays closed in the carousel. */
+private val StillCard: () -> Float = { 0f }

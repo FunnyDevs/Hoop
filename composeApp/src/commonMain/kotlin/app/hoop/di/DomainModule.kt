@@ -27,6 +27,8 @@ val domainModule = module {
     factoryOf(::GetHoopFeedUseCase)
     factoryOf(::AddReplyUseCase)
     factoryOf(::GetRepliesUseCase)
+    factoryOf(::SetFlyUseCase)
+    factoryOf(::SetReplyFlyUseCase)
     factoryOf(::GetNotificationsUseCase)
     factoryOf(::AddHoopUseCase)
     factoryOf(::RemoveHoopUseCase)

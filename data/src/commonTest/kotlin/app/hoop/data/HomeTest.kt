@@ -16,6 +16,7 @@ import app.hoop.domain.geo.Radius
 import app.hoop.domain.hoop.Hoop
 import app.hoop.domain.hoop.HoopId
 import app.hoop.domain.identity.NotificationKind
+import app.hoop.domain.post.FlyState
 import app.hoop.domain.post.PostId
 import app.hoop.domain.post.PostType
 import io.ktor.client.engine.mock.MockEngine
@@ -217,5 +218,51 @@ class HomeTest {
         assertEquals(2, first.count)
         assertEquals("q1", first.postId.value)
         assertEquals(1, list.last().count)
+    }
+
+    // ---- "Ci volo" ----
+
+    @Test fun postKnowsIfTheUserFlewToIt() = runTest {
+        val posts = feed {
+            ok("""{"result":[
+                {"objectId":"a","createdAt":"2026-11-18T11:55:00.000Z","text":"A","type":"Q","location":{"latitude":45.5,"longitude":9.2},"likesCount":4,"likedByMe":true},
+                {"objectId":"b","createdAt":"2026-11-18T11:55:00.000Z","text":"B","type":"Q","location":{"latitude":45.5,"longitude":9.2},"likesCount":1}
+            ]}""")
+        }.getFeed(home, position).getOrNull()!!
+        assertTrue(posts[0].flownByMe)
+        assertEquals(4, posts[0].fliesCount)
+        assertEquals(false, posts[1].flownByMe)
+    }
+
+    @Test fun togglingPostFlyReturnsTheServerState() = runTest {
+        val result = feed { ok("""{"result":{"liked":true,"likesCount":7}}""") }.setFly(PostId("q1"), true)
+        assertEquals(FlyState(true, 7), result.getOrNull())
+        val request = requests.single()
+        assertTrue(request.url.encodedPath.endsWith("/toggleLike"))
+        assertTrue("\"postId\":\"q1\"" in request.bodyText())
+        // The wanted state travels with the request, so repeating it cannot flip the like back.
+        assertTrue("\"liked\":true" in request.bodyText(), request.bodyText())
+    }
+
+    @Test fun togglingReplyFlyCallsTheCommentFunction() = runTest {
+        val result = feed { ok("""{"result":{"liked":false,"likesCount":0}}""") }.setReplyFly("c1", false)
+        assertEquals(FlyState(false, 0), result.getOrNull())
+        val request = requests.single()
+        assertTrue(request.url.encodedPath.endsWith("/toggleCommentLike"))
+        assertTrue("\"commentId\":\"c1\"" in request.bodyText())
+        assertTrue("\"liked\":false" in request.bodyText(), request.bodyText())
+    }
+
+    @Test fun repliesCarryTheirFlies() = runTest {
+        val reply = feed {
+            ok("""{"result":[{"objectId":"c1","createdAt":"2026-11-18T11:50:00.000Z","text":"Ciao","likesCount":3,"likedByMe":true,"user":{"objectId":"u1","name":"Marta"}}]}""")
+        }.getReplies(PostId("q1")).getOrNull()!!.single()
+        assertEquals(3, reply.fliesCount)
+        assertTrue(reply.flownByMe)
+    }
+
+    @Test fun flyWithoutConnectionFails() = runTest {
+        val result = feed { throw io.ktor.utils.io.errors.IOException("down") }.setFly(PostId("q1"), true)
+        assertEquals(DomainError.Network, result.errorOrNull())
     }
 }

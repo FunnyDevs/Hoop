@@ -39,6 +39,7 @@ import androidx.compose.ui.layout.boundsInRoot
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.layout.layout
 import androidx.compose.ui.unit.Constraints
+import androidx.compose.ui.unit.IntOffset
 import kotlin.math.PI
 import kotlin.math.abs
 import kotlin.math.cos
@@ -180,7 +181,10 @@ fun HoopPostCard(
     modifier: Modifier = Modifier,
     questionColor: Color = HoopTheme.colors.questionCards.first(),
     media: Painter? = null,
-    progress: Float = 0f,
+    /** A playing video drawn over [media] (which stays visible until its first frame); the caller owns the player. */
+    video: (@Composable () -> Unit)? = null,
+    /** Opening progress, 0 closed to 1 open. A function, read only where it is drawn: the card does not recompose at every frame. */
+    progress: () -> Float = ZeroProgress,
     /** Space taken by the system navigation bar at the bottom: the open post's bottom items rise by it. */
     bottomInset: Dp = 0.dp,
     /** Progress (0..1) of the comments sheet rising over the post; read in the draw phase only. */
@@ -194,17 +198,14 @@ fun HoopPostCard(
 ) {
     val colors = HoopTheme.colors
     val d = HoopPostCardDefaults
-    val p = progress.coerceIn(0f, 1f)
-    // Geometry may overshoot a little with the spring; opacities and widths stay within their range.
-    val k = progress.coerceIn(0f, d.OVERSHOOT_MAX)
-    fun mix(a: Dp, b: Dp) = a + (b - a) * p
-    val lift = bottomInset * p
     val isQuestion = kind == HoopPostKind.Question
     val hasMedia = !isQuestion && media != null
     val contentColor = if (hasMedia) colors.onScrim else colors.onSurface
-    val fade = (1f - p * 1.6f).coerceIn(0f, 1f)
-    BoxWithConstraints(modifier.fillMaxSize()) {
-        val cardWidth = maxWidth
+    // Progress as the card follows it: it may overshoot a little with the spring, opacities and widths stay within their range.
+    fun p() = progress().coerceIn(0f, 1f)
+    // Everything that moves with the progress is read in layout and draw lambdas (or in a small scope of its own), so opening
+    // the card never recomposes the whole card: that is what keeps the expansion smooth.
+    Box(modifier.fillMaxSize()) {
         if (!hasMedia) {
             Box(Modifier.fillMaxSize().background(questionColor))
         } else {
@@ -232,6 +233,7 @@ fun HoopPostCard(
                 } else {
                     Image(media, null, Modifier.fillMaxSize(), contentScale = ContentScale.Crop)
                 }
+                video?.invoke()
             }
         }
         // Everything but the media fades out in the landscape view and comes back when turning upright.
@@ -242,16 +244,21 @@ fun HoopPostCard(
                     .background(Brush.verticalGradient(listOf(colors.scrim.copy(alpha = 0f), colors.scrim.copy(alpha = d.BOTTOM_SCRIM_ALPHA)))),
             )
             Box(
-                Modifier.align(Alignment.TopCenter).fillMaxWidth().height(d.TopScrimHeight + 40.dp * p)
-                    .alpha(rampOf(p, d.TopScrimFade))
+                Modifier.align(Alignment.TopCenter).fillMaxWidth()
+                    .layout { measurable, constraints ->
+                        val height = (d.TopScrimHeight + 40.dp * p()).roundToPx()
+                        val placeable = measurable.measure(Constraints.fixed(constraints.maxWidth, height))
+                        layout(constraints.maxWidth, height) { placeable.place(0, 0) }
+                    }
+                    .graphicsLayer { alpha = rampOf(p(), d.TopScrimFade) }
                     .background(Brush.verticalGradient(listOf(colors.scrim.copy(alpha = d.TOP_SCRIM_ALPHA), colors.scrim.copy(alpha = 0f)))),
             )
-            if (kind == HoopPostKind.Video) {
-                HoopPlayBadge(Modifier.align(Alignment.Center).offset(y = (-HoopTheme.spacing.xl)).alpha(fade))
+            if (kind == HoopPostKind.Video && video == null) {
+                HoopPlayBadge(Modifier.align(Alignment.Center).offset(y = (-HoopTheme.spacing.xl)).graphicsLayer { alpha = (1f - p() * 1.6f).coerceIn(0f, 1f) })
                 // Playback progress, above the pills (there is no player yet, so it is a static indication).
                 Box(
                     Modifier.align(Alignment.BottomStart).padding(horizontal = d.PillsInset).padding(bottom = d.VideoBarBottom + bottomInset)
-                        .fillMaxWidth().height(d.VideoBarHeight).alpha(rampOf(p, d.PillsFade))
+                        .fillMaxWidth().height(d.VideoBarHeight).graphicsLayer { alpha = rampOf(p(), d.PillsFade) }
                         .clip(HoopTheme.shapes.pill).background(colors.onScrim.copy(alpha = 0.35f)),
                 ) { Box(Modifier.fillMaxWidth(d.VIDEO_BAR_PLAYED).fillMaxHeight().background(colors.onScrim)) }
             }
@@ -259,39 +266,52 @@ fun HoopPostCard(
 
         // Author: only the avatar when closed; with name and time when open.
         Row(
-            Modifier.align(Alignment.TopStart).padding(start = mix(d.AvatarInsetClosed, d.AvatarInsetStartOpen), top = mix(d.AvatarInsetClosed, d.AvatarTopOpen)),
+            Modifier.align(Alignment.TopStart).offset {
+                IntOffset(
+                    mixDp(d.AvatarInsetClosed, d.AvatarInsetStartOpen, p()).roundToPx(),
+                    mixDp(d.AvatarInsetClosed, d.AvatarTopOpen, p()).roundToPx(),
+                )
+            },
             verticalAlignment = Alignment.CenterVertically,
         ) {
             Box(
-                Modifier.size(mix(d.AvatarSizeClosed, d.AvatarSizeOpen)).clip(HoopTheme.shapes.circle).background(colors.avatar),
+                Modifier
+                    .layout { measurable, _ ->
+                        val side = mixDp(d.AvatarSizeClosed, d.AvatarSizeOpen, p()).roundToPx()
+                        val placeable = measurable.measure(Constraints.fixed(side, side))
+                        layout(side, side) { placeable.place(0, 0) }
+                    }
+                    .clip(HoopTheme.shapes.circle).background(colors.avatar),
                 contentAlignment = Alignment.Center,
             ) { Text(authorInitials, style = HoopTheme.typography.labelSmall, color = colors.onSurface) }
             Column(
-                Modifier.padding(start = d.AuthorGapOpen * p).widthIn(max = d.AuthorMaxWidthOpen * p).alpha(rampOf(p, d.NameFade)),
+                Modifier
+                    .layout { measurable, constraints ->
+                        val gap = (d.AuthorGapOpen * p()).roundToPx()
+                        val room = (d.AuthorMaxWidthOpen * p()).roundToPx().coerceAtMost((constraints.maxWidth - gap).coerceAtLeast(0))
+                        val placeable = measurable.measure(Constraints(maxWidth = room))
+                        layout(gap + placeable.width, placeable.height) { placeable.place(gap, 0) }
+                    }
+                    .graphicsLayer { alpha = rampOf(p(), d.NameFade) },
             ) {
                 Text(authorHandle, style = HoopTheme.typography.labelMedium.copy(fontSize = 15.sp, fontWeight = FontWeight.Bold), color = contentColor, maxLines = 1, overflow = TextOverflow.Ellipsis)
                 Text(ageLabel, style = HoopTheme.typography.labelMedium, color = contentColor.copy(alpha = 0.85f), maxLines = 1, overflow = TextOverflow.Ellipsis)
             }
         }
 
-        // Title, anchored at the bottom.
-        val titleSize = (d.TitleSizeClosed.value + (d.TitleSizeOpen.value - d.TitleSizeClosed.value) * p).sp
-        val lineHeight = d.TITLE_LINE_HEIGHT_CLOSED + (d.TITLE_LINE_HEIGHT_OPEN - d.TITLE_LINE_HEIGHT_CLOSED) * p
-        Text(
-            title,
-            Modifier.align(Alignment.BottomStart).fillMaxWidth()
-                .padding(horizontal = mix(d.TitleInsetClosed, d.TitleInsetOpen)).padding(bottom = mix(d.TitleBottomClosed, d.TitleBottomOpen) + lift),
-            style = HoopTheme.typography.titleLarge.copy(fontSize = titleSize, lineHeight = titleSize * lineHeight),
-            color = contentColor,
-            maxLines = if (p < d.CLOSED_PROGRESS) d.CLOSED_TITLE_LINES else d.OPEN_TITLE_LINES,
-            overflow = TextOverflow.Ellipsis,
-        )
+        // Title, anchored at the bottom: its size changes with the progress, so it is the one part that recomposes while opening.
+        PostTitle(title, progress, bottomInset, contentColor, Modifier.align(Alignment.BottomStart))
 
         // Closed: the time on the left, vertically centered on the same line as the counters. It never runs under them.
         Box(
             Modifier.align(Alignment.BottomStart).padding(horizontal = d.TitleInsetClosed).padding(bottom = d.MetaBottomClosed)
-                .height(d.ChipHeightClosed).widthIn(max = (cardWidth - d.TitleInsetClosed * 2 - d.CountersReserve).coerceAtLeast(d.MetaMinTextWidth))
-                .alpha(1f - rampOf(p, d.MetaFade)),
+                .height(d.ChipHeightClosed)
+                .layout { measurable, constraints ->
+                    val room = (constraints.maxWidth - d.CountersReserve.roundToPx()).coerceAtLeast(d.MetaMinTextWidth.roundToPx())
+                    val placeable = measurable.measure(constraints.copy(maxWidth = minOf(constraints.maxWidth, room)))
+                    layout(placeable.width, placeable.height) { placeable.place(0, 0) }
+                }
+                .graphicsLayer { alpha = 1f - rampOf(p(), d.MetaFade) },
             contentAlignment = Alignment.CenterStart,
         ) {
             Text(ageLabel, style = HoopTheme.typography.caption, color = contentColor.copy(alpha = 0.92f), maxLines = 1, overflow = TextOverflow.Ellipsis)
@@ -299,8 +319,9 @@ fun HoopPostCard(
 
         // Open: the street, between the title and the pills.
         Row(
-            Modifier.align(Alignment.BottomStart).padding(horizontal = d.TitleInsetOpen).padding(bottom = mix(d.TitleBottomClosed, d.TitleBottomOpen) - d.StreetBelowTitle + lift)
-                .alpha(rampOf(p, d.StreetFade)),
+            Modifier.align(Alignment.BottomStart).padding(horizontal = d.TitleInsetOpen)
+                .offset { IntOffset(0, -(mixDp(d.TitleBottomClosed, d.TitleBottomOpen, p()) - d.StreetBelowTitle + bottomInset * p()).roundToPx()) }
+                .graphicsLayer { alpha = rampOf(p(), d.StreetFade) },
             verticalAlignment = Alignment.CenterVertically,
         ) {
             Icon(HoopIcons.Pin, null, tint = contentColor, modifier = Modifier.size(d.MetaIconSize))
@@ -308,32 +329,71 @@ fun HoopPostCard(
         }
 
         // The two counters of the closed card ARE the pills of the open post: they widen, grow taller and gain a background.
-        val pillsActive = p >= d.PILLS_ACTIVE_PROGRESS
-        val chipBottom = d.MetaBottomClosed + (d.PillsBottom - d.MetaBottomClosed) * k + bottomInset * p
-        Row(
-            Modifier.align(Alignment.BottomStart).fillMaxWidth()
-                .padding(start = mix(d.TitleInsetClosed, d.PillsInset), end = d.TitleInsetClosed).padding(bottom = chipBottom),
-            verticalAlignment = Alignment.Bottom,
-        ) {
-            // Closed, the counters sit at the right end; open, the pills sit at the left, like the title.
-            Spacer(Modifier.weight((1f - p).coerceAtLeast(MIN_SPACER_WEIGHT)))
-            MorphingChip(
-                HoopIcons.Fly, HoopIcons.Fly, fliesCount, fliesLabel, p, k,
-                OpenChip(d.ChipPaddingFlyStart, d.ChipPaddingEnd, d.ChipIconOpenFly, d.ChipIconGapOpenFly),
-                contentColor, hasMedia, flown, pillsActive, onFlyClick,
-            )
-            Spacer(Modifier.width(d.MetaItemGap + (d.PillsGap - d.MetaItemGap) * p))
-            MorphingChip(
-                HoopIcons.Chat, HoopIcons.Chat, repliesCount, repliesLabel, p, k,
-                OpenChip(d.ChipPaddingRepliesStart, d.ChipPaddingEnd, d.ChipIconOpenReplies, d.ChipIconGapOpen),
-                contentColor, hasMedia, false, pillsActive, onRepliesClick,
-                // The pill becomes the sheet: its content fades as the sheet grows out of the same rectangle.
-                extra = Modifier.graphicsLayer { alpha = 1f - rampOf(sheetProgress(), d.SheetChipFade) },
-                onBounds = onRepliesBounds,
-            )
-            Spacer(Modifier.weight(p.coerceAtLeast(MIN_SPACER_WEIGHT)))
+        PostChips(
+            progress, bottomInset, fliesCount, fliesLabel, repliesCount, repliesLabel, contentColor, hasMedia, flown,
+            onFlyClick, onRepliesClick, sheetProgress, onRepliesBounds, Modifier.align(Alignment.BottomStart),
+        )
         }
-        }
+    }
+}
+
+private val ZeroProgress: () -> Float = { 0f }
+
+private fun mixDp(a: Dp, b: Dp, t: Float): Dp = a + (b - a) * t
+
+/** The title: it grows from the closed to the open size, so its text is measured again at every step of the opening. */
+@Composable
+private fun PostTitle(title: String, progress: () -> Float, bottomInset: Dp, color: Color, modifier: Modifier) {
+    val d = HoopPostCardDefaults
+    val p = progress().coerceIn(0f, 1f)
+    val lift = bottomInset * p
+    val titleSize = (d.TitleSizeClosed.value + (d.TitleSizeOpen.value - d.TitleSizeClosed.value) * p).sp
+    val lineHeight = d.TITLE_LINE_HEIGHT_CLOSED + (d.TITLE_LINE_HEIGHT_OPEN - d.TITLE_LINE_HEIGHT_CLOSED) * p
+    Text(
+        title,
+        modifier.fillMaxWidth()
+            .padding(horizontal = mixDp(d.TitleInsetClosed, d.TitleInsetOpen, p)).padding(bottom = mixDp(d.TitleBottomClosed, d.TitleBottomOpen, p) + lift),
+        style = HoopTheme.typography.titleLarge.copy(fontSize = titleSize, lineHeight = titleSize * lineHeight),
+        color = color,
+        maxLines = if (p < d.CLOSED_PROGRESS) d.CLOSED_TITLE_LINES else d.OPEN_TITLE_LINES,
+        overflow = TextOverflow.Ellipsis,
+    )
+}
+
+/** The counters that become pills: their width, height and font follow the progress, so this row has its own recomposition scope. */
+@Composable
+private fun PostChips(
+    progress: () -> Float, bottomInset: Dp, fliesCount: String, fliesLabel: String, repliesCount: String, repliesLabel: String,
+    contentColor: Color, hasMedia: Boolean, flown: Boolean, onFlyClick: () -> Unit, onRepliesClick: () -> Unit,
+    sheetProgress: () -> Float, onRepliesBounds: (Rect) -> Unit, modifier: Modifier,
+) {
+    val d = HoopPostCardDefaults
+    val p = progress().coerceIn(0f, 1f)
+    val k = progress().coerceIn(0f, d.OVERSHOOT_MAX)
+    val pillsActive = p >= d.PILLS_ACTIVE_PROGRESS
+    val chipBottom = d.MetaBottomClosed + (d.PillsBottom - d.MetaBottomClosed) * k + bottomInset * p
+    Row(
+        modifier.fillMaxWidth()
+            .padding(start = mixDp(d.TitleInsetClosed, d.PillsInset, p), end = d.TitleInsetClosed).padding(bottom = chipBottom),
+        verticalAlignment = Alignment.Bottom,
+    ) {
+        // Closed, the counters sit at the right end; open, the pills sit at the left, like the title.
+        Spacer(Modifier.weight((1f - p).coerceAtLeast(MIN_SPACER_WEIGHT)))
+        MorphingChip(
+            HoopIcons.Fly, HoopIcons.Fly, fliesCount, fliesLabel, p, k,
+            OpenChip(d.ChipPaddingFlyStart, d.ChipPaddingEnd, d.ChipIconOpenFly, d.ChipIconGapOpenFly),
+            contentColor, hasMedia, flown, pillsActive, onFlyClick,
+        )
+        Spacer(Modifier.width(d.MetaItemGap + (d.PillsGap - d.MetaItemGap) * p))
+        MorphingChip(
+            HoopIcons.Chat, HoopIcons.Chat, repliesCount, repliesLabel, p, k,
+            OpenChip(d.ChipPaddingRepliesStart, d.ChipPaddingEnd, d.ChipIconOpenReplies, d.ChipIconGapOpen),
+            contentColor, hasMedia, false, pillsActive, onRepliesClick,
+            // The pill becomes the sheet: its content fades as the sheet grows out of the same rectangle.
+            extra = Modifier.graphicsLayer { alpha = 1f - rampOf(sheetProgress(), d.SheetChipFade) },
+            onBounds = onRepliesBounds,
+        )
+        Spacer(Modifier.weight(p.coerceAtLeast(MIN_SPACER_WEIGHT)))
     }
 }
 

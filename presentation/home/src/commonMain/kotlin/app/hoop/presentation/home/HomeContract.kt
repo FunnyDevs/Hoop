@@ -67,7 +67,6 @@ data class HomeUiState(
     val openPostId: String? = null,
     val replyText: String = "",
     /** Posts the user said "Ci volo" to (local until the server supports it). */
-    val flownPostIds: Set<String> = emptySet(),
     val askBarOpen: Boolean = false,
     val composer: ComposerUi? = null,
     val capture: CaptureUi? = null,
@@ -96,6 +95,7 @@ sealed interface HomeIntent {
     data class PostOpened(val id: String) : HomeIntent
     data object PostClosed : HomeIntent
     data class FlyToggled(val id: String) : HomeIntent
+    data class ReplyFlyToggled(val postId: String, val replyId: String) : HomeIntent
     data class ReplyTextChanged(val value: String) : HomeIntent
     data object ReplySent : HomeIntent
     data object AskBarToggled : HomeIntent

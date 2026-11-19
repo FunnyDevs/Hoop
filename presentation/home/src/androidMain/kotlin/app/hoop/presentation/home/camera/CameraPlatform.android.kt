@@ -421,10 +421,16 @@ private class LoopingVideoView(context: Context) : TextureView(context), Texture
     fun seekOnce(request: SeekRequest) {
         if (request === lastSeek) return
         lastSeek = request
-        val p = player ?: return
-        val total = p.duration
-        if (total <= 0) return
-        val target = (total * request.fraction.coerceIn(0f, 1f)).toInt()
+        val p = player
+        // Not ready yet: the jump is made as soon as the video is prepared.
+        if (p == null || p.duration <= 0) { pendingSeek = request.fraction; return }
+        jump(p, request.fraction)
+    }
+
+    private var pendingSeek: Float? = null
+
+    private fun jump(p: MediaPlayer, fraction: Float) {
+        val target = (p.duration * fraction.coerceIn(0f, 1f)).toInt()
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) p.seekTo(target.toLong(), MediaPlayer.SEEK_CLOSEST) else p.seekTo(target)
     }
 
@@ -444,7 +450,10 @@ private class LoopingVideoView(context: Context) : TextureView(context), Texture
             isLooping = true
             setVolume(if (muted) 0f else 1f, if (muted) 0f else 1f)
             setOnVideoSizeChangedListener { _, w, h -> frameWidth = w; frameHeight = h; applyCover() }
-            setOnPreparedListener { it.start() }
+            setOnPreparedListener {
+                it.start()
+                pendingSeek?.let { fraction -> jump(it, fraction); pendingSeek = null }
+            }
             prepareAsync()
         }
     }

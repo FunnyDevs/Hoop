@@ -10,6 +10,8 @@ import app.hoop.data.remote.dto.LoadCommentsBody
 import app.hoop.data.remote.dto.NotificationDto
 import app.hoop.data.remote.dto.SaveCommentBody
 import app.hoop.data.remote.dto.SearchPostsBody
+import app.hoop.data.remote.dto.ToggleCommentLikeBody
+import app.hoop.data.remote.dto.ToggleLikeBody
 import app.hoop.data.remote.toDomainError
 import app.hoop.domain.FeedRepository
 import app.hoop.domain.common.DomainResult
@@ -20,6 +22,7 @@ import app.hoop.domain.identity.NotificationKind
 import app.hoop.domain.identity.UserId
 import app.hoop.domain.post.Author
 import app.hoop.domain.post.FeedPost
+import app.hoop.domain.post.FlyState
 import app.hoop.domain.post.PostId
 import app.hoop.domain.post.PostType
 import app.hoop.domain.post.Reply
@@ -48,6 +51,14 @@ internal class ParseFeedRepository(
 
     override suspend fun addReply(postId: PostId, text: String): DomainResult<Reply> = call("addReply") {
         api.saveComment(SaveCommentBody(postId.value, text, cuuid = Uuid.random().toString())).toReply()
+    }
+
+    override suspend fun setFly(postId: PostId, flown: Boolean): DomainResult<FlyState> = call("setFly") {
+        api.toggleLike(ToggleLikeBody(postId.value, flown)).let { FlyState(it.liked, it.likesCount) }
+    }
+
+    override suspend fun setReplyFly(replyId: String, flown: Boolean): DomainResult<FlyState> = call("setReplyFly") {
+        api.toggleCommentLike(ToggleCommentLikeBody(replyId, flown)).let { FlyState(it.liked, it.likesCount) }
     }
 
     override suspend fun getNotifications(): DomainResult<List<AppNotification>> = call("getNotifications") {
@@ -83,10 +94,14 @@ internal class ParseFeedRepository(
             repliesCount = commentsCount,
             street = address?.takeIf { it.isNotBlank() },
             fliesCount = likesCount,
+            flownByMe = likedByMe,
+            videoUrl = if (type == PostType.Video) media?.url else null,
         )
     }
 
-    private fun CommentDto.toReply() = Reply(id = objectId, author = user.toAuthor(), text = text, ageMinutes = ageMinutes(createdAt))
+    private fun CommentDto.toReply() = Reply(
+        id = objectId, author = user.toAuthor(), text = text, ageMinutes = ageMinutes(createdAt), fliesCount = likesCount, flownByMe = likedByMe,
+    )
 
     /**
      * Comments become "replies received", one entry per post with how many there are. Likes have no entry in the

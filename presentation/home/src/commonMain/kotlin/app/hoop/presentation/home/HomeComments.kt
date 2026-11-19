@@ -4,6 +4,8 @@ import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.spring
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
+import androidx.compose.ui.semantics.Role
 import androidx.compose.foundation.gestures.Orientation
 import androidx.compose.foundation.gestures.draggable
 import androidx.compose.foundation.gestures.rememberDraggableState
@@ -180,6 +182,7 @@ internal fun CommentsSheet(
     replyText: String,
     onReplyTextChange: (String) -> Unit,
     onSend: () -> Unit,
+    onReplyFly: (replyId: String) -> Unit,
     modifier: Modifier = Modifier,
 ) {
     val colors = HoopTheme.colors
@@ -205,7 +208,7 @@ internal fun CommentsSheet(
             }
             .drawBehind { drawRect(colors.surface) },
     ) {
-        SheetContent(post, state, isQuestion, replyText, onReplyTextChange, onSend)
+        SheetContent(post, state, isQuestion, replyText, onReplyTextChange, onSend, onReplyFly)
     }
 }
 
@@ -220,6 +223,7 @@ private fun SheetContent(
     replyText: String,
     onReplyTextChange: (String) -> Unit,
     onSend: () -> Unit,
+    onReplyFly: (replyId: String) -> Unit,
 ) {
     val colors = HoopTheme.colors
     val spec = CommentsSpec
@@ -258,7 +262,7 @@ private fun SheetContent(
             Box(Modifier.padding(top = HoopTheme.spacing.sm).fillMaxWidth().height(HoopTheme.sizes.dividerThickness).background(colors.divider))
         }
         LazyColumn(Modifier.weight(1f).fillMaxWidth().padding(horizontal = spec.sectionInset)) {
-            items(post.replies, key = { it.id }) { reply -> CommentRow(reply) }
+            items(post.replies, key = { it.id }) { reply -> CommentRow(reply) { onReplyFly(reply.id) } }
         }
         Column(
             Modifier.fillMaxWidth().background(colors.surface)
@@ -286,7 +290,7 @@ private fun sheetRelease(state: CommentsState, velocity: Float, isQuestion: Bool
 }
 
 @Composable
-private fun CommentRow(reply: Reply) {
+private fun CommentRow(reply: Reply, onFly: () -> Unit) {
     val colors = HoopTheme.colors
     val spec = CommentsSpec
     Row(
@@ -306,8 +310,8 @@ private fun CommentRow(reply: Reply) {
             }
             Text(reply.text, style = HoopTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Medium, lineHeight = 20.sp), color = colors.onSurface)
         }
-        Column(horizontalAlignment = Alignment.CenterHorizontally) {
-            Icon(HoopIcons.Fly, null, tint = colors.onSurface, modifier = Modifier.size(20.dp))
+        Column(Modifier.clip(HoopTheme.shapes.circle).clickable(role = Role.Button, onClick = onFly), horizontalAlignment = Alignment.CenterHorizontally) {
+            Icon(HoopIcons.Fly, null, tint = if (reply.flownByMe) colors.accent else colors.onSurface, modifier = Modifier.size(20.dp))
             Text(formatCount(reply.fliesCount), style = HoopTheme.typography.caption.copy(fontWeight = FontWeight.SemiBold), color = colors.onSurfaceVariant)
         }
     }

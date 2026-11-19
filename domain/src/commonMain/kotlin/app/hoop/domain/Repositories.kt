@@ -8,6 +8,7 @@ import app.hoop.domain.hoop.HoopId
 import app.hoop.domain.hoop.UserHoops
 import app.hoop.domain.identity.AppNotification
 import app.hoop.domain.post.FeedPost
+import app.hoop.domain.post.FlyState
 import app.hoop.domain.post.Reply
 import app.hoop.domain.identity.Email
 import app.hoop.domain.identity.LoginIdentifier
@@ -59,6 +60,13 @@ interface FeedRepository {
     /** The replies of a post, oldest first. */
     suspend fun getReplies(postId: PostId): DomainResult<List<Reply>>
     suspend fun addReply(postId: PostId, text: String): DomainResult<Reply>
+    /**
+     * Sets the "Ci volo" of a post to the state the user wants ([flown]); answers with the state the server now has.
+     * Sending the wanted state, not "flip it", makes a repeated request harmless.
+     */
+    suspend fun setFly(postId: PostId, flown: Boolean): DomainResult<FlyState>
+    /** The same for a comment. */
+    suspend fun setReplyFly(replyId: String, flown: Boolean): DomainResult<FlyState>
     suspend fun getNotifications(): DomainResult<List<AppNotification>>
 }
 

@@ -53,12 +53,24 @@ internal data class FeedPostDto(
     val media: FeedMediaDto? = null,
     val commentsCount: Int = 0,
     val likesCount: Int = 0,
+    val likedByMe: Boolean = false,
     val user: AuthorDto? = null,
 )
 
 /** `hoopId` limits the answer to the posts of that Hoop (the initial one or an extra). */
 @Serializable
 internal data class SearchPostsBody(val latitude: Double, val longitude: Double, val hoopId: String? = null, val limit: Int? = null)
+
+/** [liked] is the state the user wants: a repeated request cannot flip it back. */
+@Serializable
+internal data class ToggleLikeBody(val postId: String, val liked: Boolean)
+
+@Serializable
+internal data class ToggleCommentLikeBody(val commentId: String, val liked: Boolean)
+
+/** Answer of `toggleLike` and `toggleCommentLike`: the state after the toggle. */
+@Serializable
+internal data class LikeResultDto(val liked: Boolean, val likesCount: Int)
 
 @Serializable
 internal data class LoadCommentsBody(val postId: String, val limit: Int? = null)
@@ -71,6 +83,8 @@ internal data class CommentDto(
     val objectId: String,
     @Serializable(with = ParseDateAsIso::class) val createdAt: String,
     val text: String,
+    val likesCount: Int = 0,
+    val likedByMe: Boolean = false,
     val user: AuthorDto? = null,
 )
 

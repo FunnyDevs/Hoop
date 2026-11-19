@@ -62,7 +62,7 @@ The photos in the prototypes are placeholders from Pexels.
 
 ## Home
 
-The up-to-date design of the home and its states lives in the same canvas as the sign-in flow (boards "Home in Casa", "Home in Lavoro", "Domanda aperta", "Video aperto", "Tocchi il tasto", "Barra fuori da Casa", "Scrivi", "Notifiche", "Mappa a tutto schermo", "Aggiungi un hoop"). The older prototype "Hoop Demo" is superseded. Implemented in `presentation:home` (Hoops, feeds, comments and notifications are real, read from the Parse server). Missing so far: map mode (long press: radius handle, remove, add with ghost circle), real "Ci volo" (`toggleLike`) and liked state, video playback of remote videos.
+The up-to-date design of the home and its states lives in the same canvas as the sign-in flow (boards "Home in Casa", "Home in Lavoro", "Domanda aperta", "Video aperto", "Tocchi il tasto", "Barra fuori da Casa", "Scrivi", "Notifiche", "Mappa a tutto schermo", "Aggiungi un hoop"). The older prototype "Hoop Demo" is superseded. Implemented in `presentation:home` (Hoops, feeds, comments and notifications are real, read from the Parse server). Missing so far: map mode (long press: radius handle, remove, add with ghost circle), video playback of remote videos.
 
 ## Architecture
 

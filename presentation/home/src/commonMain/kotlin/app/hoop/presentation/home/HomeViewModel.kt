@@ -18,6 +18,9 @@ import app.hoop.domain.usecase.AddReplyUseCase
 import app.hoop.domain.usecase.GetHoopFeedUseCase
 import app.hoop.domain.usecase.GetNotificationsUseCase
 import app.hoop.domain.usecase.GetRepliesUseCase
+import app.hoop.domain.usecase.SetFlyUseCase
+import app.hoop.domain.usecase.SetReplyFlyUseCase
+import app.hoop.domain.post.FlyState
 import app.hoop.domain.usecase.GetUserHoopsUseCase
 import app.hoop.domain.usecase.CancelPendingPostUseCase
 import app.hoop.domain.usecase.GetPendingPostsUseCase
@@ -45,6 +48,8 @@ class HomeViewModel(
     private val getFeed: GetHoopFeedUseCase,
     private val getReplies: GetRepliesUseCase,
     private val addReply: AddReplyUseCase,
+    private val setFlyOnServer: SetFlyUseCase,
+    private val setReplyFlyOnServer: SetReplyFlyUseCase,
     private val getNotifications: GetNotificationsUseCase,
     private val publishPost: PublishPostUseCase,
     private val sendPendingPosts: SendPendingPostsUseCase,
@@ -76,9 +81,8 @@ class HomeViewModel(
                 _state.update { it.copy(openPostId = intent.id, replyText = "") }
                 loadReplies(intent.id)
             }
-            is HomeIntent.FlyToggled -> _state.update { st ->
-                st.copy(flownPostIds = if (intent.id in st.flownPostIds) st.flownPostIds - intent.id else st.flownPostIds + intent.id)
-            }
+            is HomeIntent.FlyToggled -> toggleFly(intent.id)
+            is HomeIntent.ReplyFlyToggled -> toggleReplyFly(intent.postId, intent.replyId)
             HomeIntent.PostClosed -> _state.update { it.copy(openPostId = null, replyText = "") }
             is HomeIntent.ReplyTextChanged -> _state.update { it.copy(replyText = intent.value) }
             HomeIntent.ReplySent -> sendReply()
@@ -183,6 +187,44 @@ class HomeViewModel(
                 publishState()
             }
         }
+    }
+
+    /** Posts and replies whose "Ci volo" is being sent: a second tap on the same one waits for the answer. */
+    private val flyingNow = mutableSetOf<String>()
+
+    /**
+     * "Ci volo" shows at once and is then confirmed by the server (which also gives the true count);
+     * if the server cannot be reached the old state comes back.
+     */
+    private fun toggleFly(postId: String) {
+        val before = findPost(postId) ?: return
+        if (!flyingNow.add(postId)) return
+        val guess = FlyState(!before.flownByMe, (before.fliesCount + if (before.flownByMe) -1 else 1).coerceAtLeast(0))
+        updatePost(postId) { it.withFly(guess) }
+        viewModelScope.launch {
+            val answer = setFlyOnServer(PostId(postId), guess.flown).getOrNull()
+            updatePost(postId) { it.withFly(answer ?: FlyState(before.flownByMe, before.fliesCount)) }
+            flyingNow.remove(postId)
+        }
+    }
+
+    private fun toggleReplyFly(postId: String, replyId: String) {
+        val before = findPost(postId)?.replies?.firstOrNull { it.id == replyId } ?: return
+        if (!flyingNow.add(replyId)) return
+        val guess = FlyState(!before.flownByMe, (before.fliesCount + if (before.flownByMe) -1 else 1).coerceAtLeast(0))
+        updatePost(postId) { it.withReplyFly(replyId, guess) }
+        viewModelScope.launch {
+            val answer = setReplyFlyOnServer(replyId, guess.flown).getOrNull()
+            updatePost(postId) { it.withReplyFly(replyId, answer ?: FlyState(before.flownByMe, before.fliesCount)) }
+            flyingNow.remove(replyId)
+        }
+    }
+
+    private fun findPost(postId: String): FeedPost? = feeds.values.firstNotNullOfOrNull { list -> list.firstOrNull { it.id.value == postId } }
+
+    private fun updatePost(postId: String, change: (FeedPost) -> FeedPost) {
+        feeds = feeds.mapValues { (_, list) -> list.map { if (it.id.value == postId) change(it) else it } }
+        publishState()
     }
 
     private fun sendReply() {

@@ -7,11 +7,14 @@ import app.hoop.data.remote.dto.DeletedHoopsDto
 import app.hoop.data.remote.dto.FeedPostDto
 import app.hoop.data.remote.dto.FunctionResponse
 import app.hoop.data.remote.dto.HoopDto
+import app.hoop.data.remote.dto.LikeResultDto
 import app.hoop.data.remote.dto.LoadCommentsBody
 import app.hoop.data.remote.dto.NoParams
 import app.hoop.data.remote.dto.NotificationDto
 import app.hoop.data.remote.dto.SaveCommentBody
 import app.hoop.data.remote.dto.SearchPostsBody
+import app.hoop.data.remote.dto.ToggleCommentLikeBody
+import app.hoop.data.remote.dto.ToggleLikeBody
 import app.hoop.data.remote.dto.UpdateHoopBody
 import io.ktor.client.HttpClient
 import io.ktor.client.request.post
@@ -35,6 +38,10 @@ internal class ParseHomeApi(private val client: HttpClient) {
     suspend fun loadComments(body: LoadCommentsBody): List<CommentDto> = call(ParseProtocol.FUNCTION_LOAD_COMMENTS, body)
 
     suspend fun saveComment(body: SaveCommentBody): CommentDto = call(ParseProtocol.FUNCTION_SAVE_COMMENT, body)
+
+    suspend fun toggleLike(body: ToggleLikeBody): LikeResultDto = call(ParseProtocol.FUNCTION_TOGGLE_LIKE, body)
+
+    suspend fun toggleCommentLike(body: ToggleCommentLikeBody): LikeResultDto = call(ParseProtocol.FUNCTION_TOGGLE_COMMENT_LIKE, body)
 
     suspend fun getNotifications(): List<NotificationDto> = call(ParseProtocol.FUNCTION_GET_NOTIFICATIONS)
 
