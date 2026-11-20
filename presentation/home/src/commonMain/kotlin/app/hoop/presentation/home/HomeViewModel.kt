@@ -8,6 +8,7 @@ import app.hoop.domain.common.Violation
 import app.hoop.domain.common.getOrNull
 import app.hoop.domain.geo.GeoPoint
 import app.hoop.domain.hoop.Hoop
+import app.hoop.domain.hoop.HoopId
 import app.hoop.domain.hoop.UserHoops
 import app.hoop.domain.post.FeedPost
 import app.hoop.domain.post.MediaRef
@@ -16,6 +17,8 @@ import app.hoop.domain.post.PostType
 import app.hoop.presentation.home.camera.isVideo
 import app.hoop.domain.usecase.AddReplyUseCase
 import app.hoop.domain.usecase.GetHoopFeedUseCase
+import app.hoop.domain.usecase.GetSavedHomeUseCase
+import app.hoop.domain.usecase.SaveHomeUseCase
 import app.hoop.domain.usecase.GetNotificationsUseCase
 import app.hoop.domain.usecase.GetRepliesUseCase
 import app.hoop.domain.usecase.SetFlyUseCase
@@ -46,6 +49,8 @@ class HomeViewModel(
     private val requestLocation: RequestLocationUseCase,
     private val getUserHoops: GetUserHoopsUseCase,
     private val getFeed: GetHoopFeedUseCase,
+    private val getSavedHome: GetSavedHomeUseCase,
+    private val saveHome: SaveHomeUseCase,
     private val getReplies: GetRepliesUseCase,
     private val addReply: AddReplyUseCase,
     private val setFlyOnServer: SetFlyUseCase,
@@ -75,6 +80,7 @@ class HomeViewModel(
             is HomeIntent.HoopSelected -> selectHoop(intent.id)
             // The "add a Hoop" flow (ghost circle on the map) is not built yet.
             HomeIntent.NewHoopRequested -> Unit
+            HomeIntent.RetryRequested -> retry()
             is HomeIntent.PostSelected -> _state.update { it.copy(selectedIndex = intent.index.coerceIn(0, (it.posts.size - 1).coerceAtLeast(0))) }
             // The carousel keeps its position until the card is completely open (see PostSelected).
             is HomeIntent.PostOpened -> {
@@ -135,24 +141,105 @@ class HomeViewModel(
         }
     }
 
+    /** Reloads the feeds of the known Hoops (after a post went out); a complete load is saved. */
     private suspend fun refreshFeeds() {
         val aggregate = hoops ?: return
-        feeds = aggregate.all.associate { hoop -> hoop.id.value to (getFeed(hoop, position()).getOrNull() ?: feeds[hoop.id.value].orEmpty()) }
+        if (loadFeeds(aggregate)) rememberLoad(aggregate)
         publishState()
     }
 
+    /**
+     * Loads the feed of every Hoop. A Hoop whose feed cannot be loaded keeps the one already known (the saved copy, if
+     * that is all there is). Answers whether every feed loaded.
+     */
+    private suspend fun loadFeeds(aggregate: UserHoops): Boolean {
+        var complete = true
+        feeds = aggregate.all.associate { hoop ->
+            val loaded = getFeed(hoop, position()).getOrNull()
+            if (loaded == null) complete = false
+            hoop.id.value to (loaded ?: feeds[hoop.id.value].orEmpty())
+        }
+        return complete
+    }
+
+    /** Saves a complete load so the next opening has something to show without the server. The copy is a convenience. */
+    private suspend fun rememberLoad(aggregate: UserHoops) {
+        try {
+            val savedAt = saveHome(aggregate, feeds.mapKeys { HoopId(it.key) })
+            lastLoadedAt = savedAt
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            Logger.withTag("Hoop").w(e) { "saving the Home failed" }
+        }
+    }
+
+    /** Shows the saved copy of the last complete load, if there is one, before asking the server. */
+    private suspend fun showSavedHome() {
+        val saved = try {
+            getSavedHome()
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            Logger.withTag("Hoop").w(e) { "reading the saved Home failed" }
+            null
+        } ?: return
+        hoops = saved.hoops
+        feeds = saved.feeds.mapKeys { it.key.value }
+        lastLoadedAt = saved.savedAtEpochMillis
+        _state.update { it.copy(isLoading = false, activeHoopId = saved.hoops.home.id.value) }
+        publishState(selectedIndex = 0)
+    }
+
+    private var retryJob: Job? = null
+
+    /** "Riprova": the notice stays, switched to "retrying", until the server answers or fails again. */
+    private fun retry() {
+        if (retryJob?.isActive == true) return
+        retryJob = viewModelScope.launch {
+            _state.update { s -> s.copy(offline = s.offline?.copy(retrying = true)) }
+            loadFromServer()
+        }
+    }
+
+    /** When the data on screen was last loaded from the server (or saved on the device by an earlier run). */
+    private var lastLoadedAt: Long? = null
+
+    private fun markOffline() = _state.update { it.copy(isLoading = false, offline = OfflineUi(lastLoadedAt, retrying = false)) }
+
+    /**
+     * Asks the server for the Hoops and their feeds. If all of it loads, the notice goes away and the data is saved;
+     * otherwise what is on screen stays (the saved copy, possibly with some fresh feeds) and the notice shows.
+     */
+    private suspend fun loadFromServer() {
+        val aggregate = getUserHoops().getOrNull()
+        if (aggregate == null) {
+            markOffline()
+            return
+        }
+        hoops = aggregate
+        val complete = loadFeeds(aggregate)
+        val keepSelection = _state.value.activeHoopId?.takeIf { id -> aggregate.all.any { it.id.value == id } }
+        _state.update { it.copy(isLoading = false, activeHoopId = keepSelection ?: aggregate.home.id.value) }
+        publishState(selectedIndex = if (keepSelection == null) 0 else _state.value.selectedIndex)
+        if (complete) {
+            rememberLoad(aggregate)
+            _state.update { it.copy(offline = null) }
+        } else {
+            markOffline()
+        }
+        // Posts kept on the device while there was no connection go out as soon as the connection is back.
+        sendWaitingPosts()
+    }
+
     private suspend fun bootstrap() {
-        requestLocation().getOrNull()?.let { point ->
+        // The saved copy goes first: finding the position can take seconds and the screen must not wait for it.
+        showSavedHome()
+        withTimeoutOrNull(BOOT_LOCATION_TIMEOUT_MILLIS) { requestLocation().getOrNull() }?.let { point ->
             knownLocation = point
             _state.update { it.copy(userLatitude = point.latitude, userLongitude = point.longitude) }
         }
-        val aggregate = getUserHoops().getOrNull() ?: return _state.update { it.copy(isLoading = false) }
-        hoops = aggregate
-        feeds = aggregate.all.associate { hoop -> hoop.id.value to (getFeed(hoop, position()).getOrNull() ?: emptyList()) }
-        _state.update { it.copy(isLoading = false, activeHoopId = aggregate.home.id.value) }
-        publishState(selectedIndex = 0)
-        // Posts kept on the device while there was no connection go out as soon as the home opens.
-        sendWaitingPosts()
+        loadFromServer()
     }
 
     private fun position(): GeoPoint =
@@ -407,4 +494,6 @@ class HomeViewModel(
 }
 
 private const val PUBLISH_LOCATION_TIMEOUT_MILLIS = 5_000L
+/** How long the home waits for the position before asking the server with the last known one. */
+private const val BOOT_LOCATION_TIMEOUT_MILLIS = 2_500L
 private const val CONTENT_SEPARATOR = "\u0000"

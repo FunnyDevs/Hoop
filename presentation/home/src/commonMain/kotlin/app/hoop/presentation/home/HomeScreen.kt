@@ -110,6 +110,7 @@ internal object HomeSpec {
     val popoverGap = 2.dp
     val mapTopMargin = 24.dp
     val mapBottomMargin = 24.dp
+    val offlineSide = 16.dp
     const val FOCUS_BLEND = 0.3
     const val TOAST_MILLIS = 1_900L
     const val STORY_FULL_OPEN = 0.999f
@@ -210,7 +211,13 @@ fun HomeScreen(state: HomeUiState, config: HomeConfig, onIntent: (HomeIntent) ->
                 )
             }
         }
-        if (active != null) {
+        if (state.offline != null) {
+            // Same place as the info chip, whose counts may be out of date: the notice takes over.
+            OfflineNotice(
+                state.offline, { onIntent(HomeIntent.RetryRequested) },
+                Modifier.padding(start = HomeSpec.offlineSide, end = HomeSpec.offlineSide, top = infoTop).fillMaxWidth(),
+            )
+        } else if (active != null) {
             HoopMapChip(
                 stringResource(Res.string.hoop_info, active.name ?: stringResource(Res.string.hoop_home_name), formatDistance(active.radiusMeters), active.postCount),
                 Modifier.padding(start = HomeSpec.infoStart, top = infoTop),
@@ -249,7 +256,7 @@ fun HomeScreen(state: HomeUiState, config: HomeConfig, onIntent: (HomeIntent) ->
             }
             LazyRow(
                 state = listState,
-                modifier = Modifier.align(Alignment.BottomStart).padding(bottom = cardsBottom).height(HoopPostCardDefaults.CarouselHeight).fillMaxWidth(),
+                modifier = Modifier.align(Alignment.BottomStart).padding(bottom = cardsBottom).height(HoopPostCardDefaults.CarouselHeight).fillMaxWidth().dimmed(state.offline != null),
                 // Room after the last card so that any card, the last included, can sit in the first position.
                 contentPadding = PaddingValues(start = HomeSpec.cardsStart, end = (maxWidth - HoopPostCardDefaults.CarouselWidth - HomeSpec.cardsStart).coerceAtLeast(HomeSpec.cardsEndPadding)),
                 horizontalArrangement = Arrangement.spacedBy(HomeSpec.cardsGap),
@@ -312,7 +319,7 @@ fun HomeScreen(state: HomeUiState, config: HomeConfig, onIntent: (HomeIntent) ->
             EmptyHoopCards(
                 accent = accent,
                 onPublish = { if (!state.askBarOpen && state.composer == null) onIntent(HomeIntent.AskBarToggled) },
-                modifier = Modifier.align(Alignment.BottomStart).padding(bottom = cardsBottom).height(HoopPostCardDefaults.CarouselHeight).fillMaxWidth(),
+                modifier = Modifier.align(Alignment.BottomStart).padding(bottom = cardsBottom).height(HoopPostCardDefaults.CarouselHeight).fillMaxWidth().dimmed(state.offline != null),
             )
         }
 

@@ -13,6 +13,28 @@
     <string name="distance_meters">%1$d&#160;m</string>
     <string name="distance_kilometers">%1$s&#160;km</string>
 
+    <!-- Offline notice -->
+    <string name="offline_unknown">Offline</string>
+    <string name="offline_today">Offline · aggiornato alle %1$s</string>
+    <string name="offline_yesterday">Offline · aggiornato ieri alle %1$s</string>
+    <string name="offline_other_day">Offline · aggiornato il %1$d %2$s alle %3$s</string>
+    <string name="offline_retry">Riprova</string>
+    <string name="offline_retrying">Riprovo…</string>
+    <string-array name="months_short">
+        <item>gen</item>
+        <item>feb</item>
+        <item>mar</item>
+        <item>apr</item>
+        <item>mag</item>
+        <item>giu</item>
+        <item>lug</item>
+        <item>ago</item>
+        <item>set</item>
+        <item>ott</item>
+        <item>nov</item>
+        <item>dic</item>
+    </string-array>
+
     <!-- Cards -->
     <string name="empty_hoop_title">Ancora niente qui</string>
     <string name="empty_hoop_hint">Sii il primo a pubblicare</string>

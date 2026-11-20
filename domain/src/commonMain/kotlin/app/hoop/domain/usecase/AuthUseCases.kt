@@ -2,6 +2,7 @@ package app.hoop.domain.usecase
 
 import app.hoop.domain.AuthRepository
 import app.hoop.domain.Availability
+import app.hoop.domain.HomeCacheRepository
 import app.hoop.domain.SignUpRequest
 import app.hoop.domain.common.DomainResult
 import app.hoop.domain.common.flatMap
@@ -13,8 +14,12 @@ import app.hoop.domain.identity.Password
 import app.hoop.domain.identity.User
 import app.hoop.domain.identity.Username
 
-class SignOutUseCase(private val auth: AuthRepository) {
-    suspend operator fun invoke() = auth.signOut()
+/** Signs out and forgets the saved Home, so the next person to sign in on this device never sees it. */
+class SignOutUseCase(private val auth: AuthRepository, private val savedHome: HomeCacheRepository) {
+    suspend operator fun invoke() {
+        auth.signOut()
+        savedHome.clear()
+    }
 }
 
 class SignInUseCase(private val auth: AuthRepository) {

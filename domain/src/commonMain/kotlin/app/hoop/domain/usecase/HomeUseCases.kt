@@ -1,6 +1,8 @@
 package app.hoop.domain.usecase
 
 import app.hoop.domain.FeedRepository
+import app.hoop.domain.HomeCacheRepository
+import app.hoop.domain.HomeSnapshot
 import app.hoop.domain.HoopsRepository
 import app.hoop.domain.common.DomainResult
 import app.hoop.domain.common.Violation
@@ -59,4 +61,13 @@ class RemoveHoopUseCase(private val hoops: HoopsRepository) {
 class ResizeHoopUseCase(private val hoops: HoopsRepository) {
     suspend operator fun invoke(id: HoopId, radiusMeters: Int): DomainResult<UserHoops> =
         Radius.create(radiusMeters).flatMap { hoops.resizeHoop(id, it) }
+}
+
+class GetSavedHomeUseCase(private val cache: HomeCacheRepository) {
+    suspend operator fun invoke(): HomeSnapshot? = cache.load()
+}
+
+class SaveHomeUseCase(private val cache: HomeCacheRepository) {
+    /** Answers with the moment the Home was saved. */
+    suspend operator fun invoke(hoops: UserHoops, feeds: Map<HoopId, List<FeedPost>>): Long = cache.save(hoops, feeds)
 }

@@ -56,6 +56,12 @@ class QueuedPostUi(
 /** The full-screen camera flow: live camera while [media] is `null`, the confirmation of the shot once it exists. */
 class CaptureUi(val media: MediaRef? = null, val frontLens: Boolean = false)
 
+/**
+ * The server cannot be reached: the home shows the last data it saved, dimmed, with a notice. [lastUpdatedMillis] is when
+ * the data was last loaded successfully (`null` if unknown); [retrying] is true while a new attempt is under way.
+ */
+data class OfflineUi(val lastUpdatedMillis: Long? = null, val retrying: Boolean = false)
+
 data class HomeUiState(
     val isLoading: Boolean = true,
     val userLatitude: Double,
@@ -80,6 +86,8 @@ data class HomeUiState(
     val queueOpen: Boolean = false,
     /** The waiting posts cannot go out until the user signs in again. */
     val needsSignIn: Boolean = false,
+    /** Not `null` while the data on screen is the saved copy because the server does not answer. */
+    val offline: OfflineUi? = null,
 ) {
     val activeHoop: HoopUi? get() = hoops.firstOrNull { it.id == activeHoopId }
     val selectedPost: FeedPost? get() = posts.getOrNull(selectedIndex)
@@ -89,6 +97,8 @@ data class HomeUiState(
 sealed interface HomeIntent {
     data class HoopSelected(val id: String) : HomeIntent
     data object NewHoopRequested : HomeIntent
+    /** "Riprova" of the offline notice: load everything again. */
+    data object RetryRequested : HomeIntent
     /** The keyboard was closed while writing: the composer folds back into the ask bar. */
     data object ComposerCollapsed : HomeIntent
     data class PostSelected(val index: Int) : HomeIntent

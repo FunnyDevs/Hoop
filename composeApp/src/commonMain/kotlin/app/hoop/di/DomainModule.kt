@@ -25,6 +25,8 @@ val domainModule = module {
     factoryOf(::SignOutUseCase)
     factoryOf(::GetUserHoopsUseCase)
     factoryOf(::GetHoopFeedUseCase)
+    factoryOf(::GetSavedHomeUseCase)
+    factoryOf(::SaveHomeUseCase)
     factoryOf(::AddReplyUseCase)
     factoryOf(::GetRepliesUseCase)
     factoryOf(::SetFlyUseCase)

@@ -70,6 +70,21 @@ interface FeedRepository {
     suspend fun getNotifications(): DomainResult<List<AppNotification>>
 }
 
+/** The Home as it was the last time it loaded completely, with the moment it was saved. */
+class HomeSnapshot(val hoops: UserHoops, val feeds: Map<HoopId, List<FeedPost>>, val savedAtEpochMillis: Long)
+
+/**
+ * Keeps the last complete Home on the device, so it can be shown when the server cannot be reached.
+ * Replies are not kept: they are read when a post opens.
+ */
+interface HomeCacheRepository {
+    /** The saved Home, with the age of its posts brought up to now; `null` if nothing was saved. */
+    suspend fun load(): HomeSnapshot?
+    /** Replaces the saved Home; answers with the moment it was saved. */
+    suspend fun save(hoops: UserHoops, feeds: Map<HoopId, List<FeedPost>>): Long
+    suspend fun clear()
+}
+
 interface PostsRepository {
     /** [onProgress] reports how much of the work is done, from 0 to 1 (the upload of a photo or video is most of it). */
     suspend fun publish(draft: PostDraft, onProgress: (Float) -> Unit = {}): DomainResult<PostId>

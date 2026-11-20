@@ -1,0 +1,67 @@
+-- The last Home that loaded completely: the Hoops, their posts and when it was saved.
+-- It is replaced as a whole, so it never mixes two loads.
+CREATE TABLE CachedHoop (
+    hoopId TEXT NOT NULL PRIMARY KEY,
+    position INTEGER NOT NULL,
+    isHome INTEGER NOT NULL,
+    name TEXT,
+    latitude REAL,
+    longitude REAL,
+    radiusMeters INTEGER NOT NULL
+);
+
+CREATE TABLE CachedPost (
+    hoopId TEXT NOT NULL,
+    postId TEXT NOT NULL,
+    position INTEGER NOT NULL,
+    type TEXT NOT NULL,
+    authorId TEXT NOT NULL,
+    authorName TEXT NOT NULL,
+    text TEXT NOT NULL,
+    imageUrl TEXT,
+    videoUrl TEXT,
+    latitude REAL NOT NULL,
+    longitude REAL NOT NULL,
+    distanceMeters INTEGER NOT NULL,
+    ageMinutes INTEGER NOT NULL,
+    repliesCount INTEGER NOT NULL,
+    street TEXT,
+    fliesCount INTEGER NOT NULL,
+    flownByMe INTEGER NOT NULL,
+    PRIMARY KEY (hoopId, postId)
+);
+
+CREATE TABLE CachedHomeMeta (
+    id INTEGER NOT NULL PRIMARY KEY,
+    savedAtEpochMillis INTEGER NOT NULL
+);
+
+selectHoops:
+SELECT * FROM CachedHoop ORDER BY position ASC;
+
+selectPosts:
+SELECT * FROM CachedPost ORDER BY hoopId ASC, position ASC;
+
+selectSavedAt:
+SELECT savedAtEpochMillis FROM CachedHomeMeta WHERE id = 1;
+
+insertHoop:
+INSERT INTO CachedHoop(hoopId, position, isHome, name, latitude, longitude, radiusMeters) VALUES (?, ?, ?, ?, ?, ?, ?);
+
+insertPost:
+INSERT OR REPLACE INTO CachedPost(
+    hoopId, postId, position, type, authorId, authorName, text, imageUrl, videoUrl, latitude, longitude,
+    distanceMeters, ageMinutes, repliesCount, street, fliesCount, flownByMe
+) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);
+
+setSavedAt:
+INSERT OR REPLACE INTO CachedHomeMeta(id, savedAtEpochMillis) VALUES (1, ?);
+
+deleteHoops:
+DELETE FROM CachedHoop;
+
+deletePosts:
+DELETE FROM CachedPost;
+
+deleteSavedAt:
+DELETE FROM CachedHomeMeta;

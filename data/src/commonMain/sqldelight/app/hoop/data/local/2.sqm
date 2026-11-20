@@ -1,0 +1,36 @@
+-- Version 2 had no copy of the Home: it is kept to show the last data when the server cannot be reached.
+CREATE TABLE CachedHoop (
+    hoopId TEXT NOT NULL PRIMARY KEY,
+    position INTEGER NOT NULL,
+    isHome INTEGER NOT NULL,
+    name TEXT,
+    latitude REAL,
+    longitude REAL,
+    radiusMeters INTEGER NOT NULL
+);
+
+CREATE TABLE CachedPost (
+    hoopId TEXT NOT NULL,
+    postId TEXT NOT NULL,
+    position INTEGER NOT NULL,
+    type TEXT NOT NULL,
+    authorId TEXT NOT NULL,
+    authorName TEXT NOT NULL,
+    text TEXT NOT NULL,
+    imageUrl TEXT,
+    videoUrl TEXT,
+    latitude REAL NOT NULL,
+    longitude REAL NOT NULL,
+    distanceMeters INTEGER NOT NULL,
+    ageMinutes INTEGER NOT NULL,
+    repliesCount INTEGER NOT NULL,
+    street TEXT,
+    fliesCount INTEGER NOT NULL,
+    flownByMe INTEGER NOT NULL,
+    PRIMARY KEY (hoopId, postId)
+);
+
+CREATE TABLE CachedHomeMeta (
+    id INTEGER NOT NULL PRIMARY KEY,
+    savedAtEpochMillis INTEGER NOT NULL
+);

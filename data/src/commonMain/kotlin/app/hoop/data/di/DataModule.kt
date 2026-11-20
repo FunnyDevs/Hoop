@@ -1,8 +1,11 @@
 package app.hoop.data.di
 
+import app.cash.sqldelight.db.SqlDriver
 import app.hoop.data.config.ParseConfig
+import app.hoop.data.local.InMemoryHomeCacheRepository
 import app.hoop.data.local.InMemoryPendingPostsRepository
 import app.hoop.data.local.SqlDriverFactory
+import app.hoop.data.local.SqlHomeCacheRepository
 import app.hoop.data.local.SqlPendingPostsRepository
 import app.hoop.data.media.MediaFileReader
 import app.hoop.data.remote.ParsePostsApi
@@ -19,6 +22,7 @@ import app.hoop.data.session.InMemorySessionTokenStore
 import app.hoop.data.session.SessionTokenStore
 import app.hoop.domain.AuthRepository
 import app.hoop.domain.FeedRepository
+import app.hoop.domain.HomeCacheRepository
 import app.hoop.domain.HoopsRepository
 import app.hoop.domain.PendingPostsRepository
 import app.hoop.domain.PostsRepository
@@ -40,10 +44,13 @@ fun dataModule(config: ParseConfig) = module {
     single { ParseHomeApi(get()) }
     single<HoopsRepository> { ParseHoopsRepository(get()) }
     single<FeedRepository> { ParseFeedRepository(get()) }
-    // Posts waiting to be sent live in the local database when the platform provides one.
-    single<PendingPostsRepository> {
-        getOrNull<SqlDriverFactory>()?.let { SqlPendingPostsRepository(it.create()) } ?: InMemoryPendingPostsRepository()
-    }
+    // One local database, shared by the waiting posts and the saved Home, when the platform provides one.
+    single { LocalDatabase(getOrNull<SqlDriverFactory>()?.create()) }
+    single<PendingPostsRepository> { get<LocalDatabase>().driver?.let { SqlPendingPostsRepository(it) } ?: InMemoryPendingPostsRepository() }
+    single<HomeCacheRepository> { get<LocalDatabase>().driver?.let { SqlHomeCacheRepository(it) } ?: InMemoryHomeCacheRepository() }
     // Posts are published on the server (reading local files needs the platform [MediaFileReader]).
     single<PostsRepository> { ParsePostsRepository(ParsePostsApi(get()), get<MediaFileReader>()) }
 }
+
+/** The one connection to the local database; `null` when the platform provides none. */
+private class LocalDatabase(val driver: SqlDriver?)
